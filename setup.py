@@ -13,7 +13,6 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url='https://github.com/rylar8/rylar_baseball',
     project_urls = {
-        "Bug Tracker": "https://github.com/rylar8/rylar_baseball/issues"
     },
     license='MIT',
     packages=['rylar_baseball'],

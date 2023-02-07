@@ -8,7 +8,7 @@ setuptools.setup(
     version='0.0.1',
     author='Ryley Larson',
     author_email='rlarson.ump@gmail.com',
-    description='Testing installation of Package',
+    description='Private package to read trackman data',
     long_description=long_description,
     long_description_content_type="text/markdown",
     url='https://github.com/rylar8/rylar_baseball',

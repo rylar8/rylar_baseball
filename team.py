@@ -1,7 +1,8 @@
 
 
 class Team():
-    def __init__(self):
+    def __init__(self, csv):
+        self.csv = csv
         self.teamID = 1
 
     def players():

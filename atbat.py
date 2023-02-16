@@ -2,20 +2,29 @@ import pandas as pd
 from pitch import Pitch
 
 class AtBat():
-    def __init__(self, csv, inning, top_bottom, at_bat):
+    def __init__(self, csv, inning, at_bat, top_bottom):
+        self.csv = csv
+        self.inning = inning
         self.game_data = pd.read_csv(csv)
+        self.top_bottom = top_bottom
+
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
-        self.half_inning_data = self.inning_data[self.inning_data['Top/Bottom'] == top_bottom]
+        if top_bottom == 'top':
+            self.half_inning_data = self.inning_data[self.inning_data['Top/Bottom'] == 'Top']
+        elif top_bottom == 'bottom':
+            self.half_inning_data = self.inning_data[self.inning_data['Top/Bottom'] == 'Bottom']
+        else:
+            raise ValueError(f"top_bottom parameter requires either 'top' or 'bottom' not '{top_bottom}'")
+        
         self.data = self.half_inning_data[self.half_inning_data['PAofInning'] == at_bat]
         self.number = at_bat
-        self.pitches = self.getPitches(csv, inning, at_bat, top_bottom)
 
-    def getPitches(self, csv, inning, at_bat, top_bottom):
+    def pitches(self):
         i = 1
         pitches = []
         while True: 
-            if len(Pitch(csv, inning, top_bottom, at_bat, i).data) > 0:
-                pitches.append(Pitch(csv, inning, top_bottom, at_bat, i))
+            if len(Pitch(self.csv, self.inning, self.number, i, self.top_bottom).data) > 0:
+                pitches.append(Pitch(self.csv, self.inning, self.number, i, self.top_bottom))
                 i += 1
             else:
                 break

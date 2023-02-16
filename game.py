@@ -3,6 +3,7 @@ from inning import Inning
 
 class Game:
     def __init__(self, csv):
+        self.csv = csv
         self.data = pd.read_csv(csv)
         self.stadium = self.data.iloc[0]['Stadium']
         self.level = self.data.iloc[0]['Level']
@@ -13,14 +14,13 @@ class Game:
         self.time = self.data.iloc[0]['Time']
         self.home = 'Insert home team object'
         self.away = 'Insert away team object'
-        self.innings = self.getInnings(csv)
 
-    def getInnings(self, csv):
+    def innings(self, top_bottom):
         i = 1
         innings = []
         while True: 
-            if len(Inning(csv, i).data) > 0:
-                innings.append(Inning(csv, i))
+            if len(Inning(self.csv, i, top_bottom).data) > 0:
+                innings.append(Inning(self.csv, i, top_bottom))
                 i += 1
             else:
                 break

@@ -2,21 +2,28 @@ import pandas as pd
 from atbat import AtBat
 
 class Inning():
-    def __init__(self, csv, inning):
+    def __init__(self, csv, inning, top_bottom):
+        self.csv = csv
         self.game_data = pd.read_csv(csv)
-        self.data = self.game_data[self.game_data['Inning'] == inning]
-        self.number = inning
-        self.top = self.data[self.data['Top/Bottom'] == 'Top']
-        self.bottom = self.data[self.data['Top/Bottom'] == 'Bottom']
-        self.at_bats = self.getAtBats(csv, inning)
+        self.top_bottom = top_bottom
+        self.inning_data = self.game_data[self.game_data['Inning'] == inning]
 
-    def getAtBats(self, csv, inning, top_bottom):
+        if top_bottom == 'top':
+            self.data = self.inning_data[self.inning_data['Top/Bottom'] == 'Top']
+        elif top_bottom == 'bottom':
+            self.data = self.inning_data[self.inning_data['Top/Bottom'] == 'Bottom']
+        else:
+            raise ValueError(f"top_bottom parameter requires either 'top' or 'bottom' not '{top_bottom}'")
+
+        self.number = inning
+
+    def at_bats(self):
         i = 1
         at_bats = []
         while True: 
-            if len(AtBat(csv, inning, top_bottom, i).data) > 0:
-                at_bats.append(AtBat(csv, inning, top_bottom, i))
+            if len(AtBat(self.csv, self.number, i, self.top_bottom).data) > 0:
+                at_bats.append(AtBat(self.csv, self.number, i, self.top_bottom))
                 i += 1
             else:
                 break
-        return {'top' : at_bats}
+        return at_bats

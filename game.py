@@ -12,8 +12,8 @@ class Game:
         self.game_id = 'Insert local ID system?'
         self.date = self.data.iloc[0]['Date']
         self.time = self.data.iloc[0]['Time']
-        self.home = Team(self, self.data.iloc[0]['HomeTeam'])
-        self.away = Team(self, self.data.iloc[0]['AwayTeam'])
+        self.home = Team(self, data.iloc[0]['HomeTeam'][0])
+        self.away = Team(self, data.iloc[0]['AwayTeam'][0])
 
     def innings(self, top_bottom):
         i = 1

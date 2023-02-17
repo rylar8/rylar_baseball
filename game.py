@@ -2,9 +2,8 @@ import pandas as pd
 from inning import Inning
 
 class Game:
-    def __init__(self, csv):
-        self.csv = csv
-        self.data = pd.read_csv(csv)
+    def __init__(self, data):
+        self.data = data
         self.stadium = self.data.iloc[0]['Stadium']
         self.level = self.data.iloc[0]['Level']
         self.league = self.data.iloc[0]['League']
@@ -19,8 +18,8 @@ class Game:
         i = 1
         innings = []
         while True: 
-            if len(Inning(self.csv, i, top_bottom).data) > 0:
-                innings.append(Inning(self.csv, i, top_bottom))
+            if len(Inning(self.data, i, top_bottom).data) > 0:
+                innings.append(Inning(self.data, i, top_bottom))
                 i += 1
             else:
                 break

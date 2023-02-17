@@ -1,8 +1,8 @@
 import pandas as pd
 
 class Pitch():
-    def __init__(self, csv, inning, at_bat, pitch, top_bottom = 'both'):
-        self.game_data = pd.read_csv(csv)
+    def __init__(self, data, inning, at_bat, pitch, top_bottom = 'both'):
+        self.game_data = data
 
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
         if top_bottom == 'top':

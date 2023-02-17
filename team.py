@@ -1,9 +1,12 @@
 
 
 class Team():
-    def __init__(self, csv):
-        self.csv = csv
+    def __init__(self, data):
+        self.data = data
         self.teamID = 1
+        self.league = ''
+        self.division = ''
+        self.year = ''
 
     def players():
         pass

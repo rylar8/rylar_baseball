@@ -2,10 +2,9 @@ import pandas as pd
 from pitch import Pitch
 
 class AtBat():
-    def __init__(self, csv, inning, at_bat, top_bottom):
-        self.csv = csv
+    def __init__(self, data, inning, at_bat, top_bottom):
         self.inning = inning
-        self.game_data = pd.read_csv(csv)
+        self.game_data = data
         self.top_bottom = top_bottom
 
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
@@ -23,8 +22,8 @@ class AtBat():
         i = 1
         pitches = []
         while True: 
-            if len(Pitch(self.csv, self.inning, self.number, i, self.top_bottom).data) > 0:
-                pitches.append(Pitch(self.csv, self.inning, self.number, i, self.top_bottom))
+            if len(Pitch(self.game_data, self.inning, self.number, i, self.top_bottom).data) > 0:
+                pitches.append(Pitch(self.game_data, self.inning, self.number, i, self.top_bottom))
                 i += 1
             else:
                 break

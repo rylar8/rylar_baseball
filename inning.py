@@ -2,9 +2,8 @@ import pandas as pd
 from atbat import AtBat
 
 class Inning():
-    def __init__(self, csv, inning, top_bottom):
-        self.csv = csv
-        self.game_data = pd.read_csv(csv)
+    def __init__(self, data, inning, top_bottom):
+        self.game_data = data
         self.top_bottom = top_bottom
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
 
@@ -21,8 +20,8 @@ class Inning():
         i = 1
         at_bats = []
         while True: 
-            if len(AtBat(self.csv, self.number, i, self.top_bottom).data) > 0:
-                at_bats.append(AtBat(self.csv, self.number, i, self.top_bottom))
+            if len(AtBat(self.game_data, self.number, i, self.top_bottom).data) > 0:
+                at_bats.append(AtBat(self.game_data, self.number, i, self.top_bottom))
                 i += 1
             else:
                 break

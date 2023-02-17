@@ -1,27 +1,40 @@
 
 
 class Team():
-    def __init__(self, data):
-        self.data = data
-        self.teamID = 1
-        self.league = ''
-        self.division = ''
-        self.year = ''
+    def __init__(self, trackman_id):
+        self.trackman_id = trackman_id
 
-    def players():
+    def games(self):
+        games = []
+        return games
+
+    def addGame(game):
         pass
 
-    def pitchers():
+    def addPlayer(self):
         pass
 
-    def hitters():
+    def players(self):
         pass
 
-    def catchers():
+    def pitchers(self):
         pass
 
-    def infielders():
+    def hitters(self):
         pass
 
-    def outfielders():
+    def writeHitterScouting(self):
         pass
+
+    def writePitcherScouting(self):
+        pass
+
+    def writeSprayCharts(self):
+        pass
+
+    def writeRunCards(self):
+        pass
+
+    def optimizeLineup(self):
+        pass
+

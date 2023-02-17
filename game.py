@@ -1,5 +1,6 @@
 import pandas as pd
 from inning import Inning
+from team import Team
 
 class Game:
     def __init__(self, data):
@@ -11,8 +12,8 @@ class Game:
         self.game_id = 'Insert local ID system?'
         self.date = self.data.iloc[0]['Date']
         self.time = self.data.iloc[0]['Time']
-        self.home = 'Insert home team object'
-        self.away = 'Insert away team object'
+        self.home = Team(self, self.data.iloc[0]['HomeTeam'])
+        self.away = Team(self, self.data.iloc[0]['AwayTeam'])
 
     def innings(self, top_bottom):
         i = 1
@@ -25,3 +26,9 @@ class Game:
                 break
         return innings
         
+    def writeHitterReports():
+        pass
+
+    def writePitcherReports():
+        pass
+

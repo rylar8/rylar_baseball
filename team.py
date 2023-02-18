@@ -8,7 +8,7 @@ class Team():
         games = []
         return games
 
-    def addGame(game):
+    def addGame(self, game):
         pass
 
     def addPlayer(self):

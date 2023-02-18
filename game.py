@@ -1,4 +1,3 @@
-import pandas as pd
 from inning import Inning
 from team import Team
 

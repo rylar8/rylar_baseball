@@ -3,6 +3,7 @@
 class Team():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id
+        
 
     def games(self):
         games = []

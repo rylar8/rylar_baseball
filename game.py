@@ -40,7 +40,7 @@ class Game:
             VALUES (?, ?, ?);''', (league_id, self.year, self.league))
             con.commit()
             #Get full league name
-            league_name = input("Input new league name: ")
+            league_name = input(f"Input new league name ({self.league}): ")
             cur.execute('UPDATE leagues SET league_name = ? WHERE league_id = ?', (league_name, league_id))
             con.commit()
         except:
@@ -57,7 +57,7 @@ class Game:
             VALUES (?, ?, ?, ?);''', (division_id, league_id, self.year, self.division))
             con.commit()
             #Get full division name
-            division_name = input("Input new division name: ")
+            division_name = input(f"Input new division name ({self.division}): ")
             cur.execute('UPDATE divisions SET division_name = ? WHERE division_id = ?', (division_name, division_id))
             con.commit()
         except:
@@ -111,6 +111,47 @@ class Game:
             con.commit()
         except:
             print(f'Game already in games table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (gameID - {self.trackman_id})')
+        #Add batters
+        for batter_id in set(self.data['BatterId'].dropna()):
+            batter_name = self.data[self.data['BatterId'] == batter_id].iloc[0]['Batter']
+            #Get team id
+            batter_team = self.data[self.data['BatterId'] == batter_id].iloc[0]['BatterTeam']
+            cur.execute('SELECT team_id FROM teams WHERE trackman_name = ? AND year = ?',
+                        (batter_team, self.year))
+            team_id = cur.fetchone()[0]
+            #Get batter side id
+            batter_side = self.data[self.data['BatterId'] == batter_id].iloc[0]['BatterSide']
+            cur.execute('SELECT side_id FROM sides WHERE side = ?',
+                        (batter_side,))
+            batter_side_id = cur.fetchone()[0]
+            batter_id = int(batter_id)
+            try:
+                cur.execute('''INSERT INTO batters (batter_name, team_id, trackman_id, batter_side_id)
+                VALUES (?, ?, ?, ?)''', (batter_name, team_id, batter_id, batter_side_id))
+                con.commit()
+            except:
+                pass
+        #Add pitchers
+        for pitcher_id in set(self.data['PitcherId'].dropna()):
+            pitcher_name = self.data[self.data['PitcherId'] == pitcher_id].iloc[0]['Pitcher']
+            #Get team id
+            pitcher_team = self.data[self.data['PitcherId'] == pitcher_id].iloc[0]['PitcherTeam']
+            cur.execute('SELECT team_id FROM teams WHERE trackman_name = ? AND year = ?',
+                        (pitcher_team, self.year))
+            team_id = cur.fetchone()[0]
+            #Get batter side id
+            pitcher_side = self.data[self.data['PitcherId'] == pitcher_id].iloc[0]['PitcherThrows']
+            cur.execute('SELECT side_id FROM sides WHERE side = ?',
+                        (pitcher_side,))
+            pitcher_side_id = cur.fetchone()[0]
+            pitcher_id = int(pitcher_id)
+            try:
+                cur.execute('''INSERT INTO pitchers (pitcher_name, team_id, trackman_id, pitcher_side_id)
+                VALUES (?, ?, ?, ?)''', (pitcher_name, team_id, pitcher_id, pitcher_side_id))
+                con.commit()
+            except:
+                pass
+
 
     def writeHitterReports():
         pass

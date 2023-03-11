@@ -17,6 +17,20 @@ class AtBat():
         
         self.data = self.half_inning_data[self.half_inning_data['PAofInning'] == at_bat]
         self.number = at_bat
+        try:
+            self.batter = self.data['Batter'].iloc[0]
+            self.batter_id = self.data['BatterId'].iloc[0]
+            self.pitcher = self.data['Pitcher'].iloc[0]
+            self.pitcher_id = self.data['PitcherId'].iloc[0]
+            self.catcher = self.data['Catcher'].iloc[0]
+            self.catcher_id = self.data['CatcherId'].iloc[0]
+        except IndexError:
+            self.batter = self.data['Batter']
+            self.batter_id = self.data['BatterId']
+            self.pitcher = self.data['Pitcher']
+            self.pitcher_id = self.data['PitcherId']
+            self.catcher = self.data['Catcher']
+            self.catcher_id = self.data['CatcherId']
 
     def pitches(self):
         i = 1

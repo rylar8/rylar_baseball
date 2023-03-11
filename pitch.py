@@ -17,6 +17,12 @@ class Pitch():
         self.number = pitch
 
         if len(self.data) > 0:
+            self.batter = self.data['Batter'].iloc[0]
+            self.batter_id = self.data['BatterId'].iloc[0]
+            self.pitcher = self.data['Pitcher'].iloc[0]
+            self.pitcher_id = self.data['PitcherId'].iloc[0]
+            self.catcher = self.data['Catcher'].iloc[0]
+            self.catcher_id = self.data['CatcherId'].iloc[0]
             self.velocity = self.data['RelSpeed'].iloc[0]
             self.vertical = self.data['VertBreak'].iloc[0]
             self.induced = self.data['InducedVertBreak'].iloc[0]

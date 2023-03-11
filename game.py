@@ -78,24 +78,24 @@ class Game:
 
                     WHERE games.trackman_id = ?''', (game_id,))
         
-        cols = ['game_id', 'pitch_num', 'inning', 'top_bottom_id', 'pa_of_inning', 'pitch_of_pa', 'pitcher_id', 'batter_id',
-                'catcher_id', 'league_id', 'division_id', 'home_id', 'away_id', 'outs', 'balls', 'strikes',
-                'velocity', 'vertical', 'induced', 'horizontal', 'spin', 'axis', 'tilt', 'release_height', 'release_side', 
-                'release_extension', 'auto_type_id', 'tagged_type_id', 'call_id', 'location_height', 'location_side', 'exit_velocity',
-                'launch_angle', 'hit_direction', 'hit_spin', 'hit_type_id', 'distance', 'hang_time', 'hit_bearing', 'result_id',
-                'outs_made', 'runs_scored', 'catcher_velocity', 'catcher_pop', 'trackman_game_id', 'batter_name', 'batter_trackman_id',
-                'batter_side', 'home_name', 'home_trackman_id', 'away_name', 'away_trackman_id', 'top_bottom', 'pitcher_name', 
-                'pitcher_trackman_id', 'pitcher_side', 'catcher_name', 'catcher_trackman_id', 'catcher_side', 'league_name', 
-                'league_trackman_id', 'division_name', 'division_trackman_id', 'stadium_name', 'stadium_trackman_id', 'auto_pitch_type',
-                'tagged_pitch_type', 'pitch_call', 'hit_type', 'result']
-        filt = ['trackman_game_id', 'pitch_num', 'inning', 'top_bottom', 'pa_of_inning', 'pitch_of_pa', 'pitcher_name',
-                'pitcher_trackman_id', 'pitcher_side', 'batter_name', 'batter_trackman_id', 'batter_side', 'catcher_name',
-                'catcher_trackman_id', 'catcher_side', 'league_name', 'league_trackman_id', 'division_name', 'division_trackman_id',
-                'home_name', 'home_trackman_id', 'away_name', 'away_trackman_id', 'outs', 'balls', 'strikes', 'velocity', 'vertical',
-                'induced', 'horizontal', 'spin', 'axis', 'tilt', 'release_height', 'release_side', 'release_extension', 'auto_pitch_type',
-                'tagged_pitch_type', 'pitch_call', 'location_height','location_side', 'exit_velocity', 'launch_angle', 'hit_direction',
-                'hit_spin', 'hit_type', 'distance', 'hang_time', 'hit_bearing','result', 'outs_made', 'runs_scored', 'catcher_velocity',
-                'catcher_pop']
+        cols = ['game_id', 'PitchNo', 'Inning', 'top_bottom_id', 'PAofInning', 'PitchofPA', 'pitcher_id', 'batter_id',
+                'catcher_id', 'league_id', 'division_id', 'home_id', 'away_id', 'Outs', 'Balls', 'Strikes',
+                'RelSpeed', 'VertBreak', 'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 
+                'Extension', 'auto_type_id', 'tagged_type_id', 'call_id', 'PlateLocHeight', 'PlateLocSide', 'ExitSpeed',
+                'Angle', 'Direction', 'HitSpinRate', 'hit_type_id', 'Distance', 'HangTime', 'Bearing', 'result_id',
+                'OutsOnPlay', 'RunsScored', 'ThrowSpeed', 'PopTime', 'GameID', 'Batter', 'BatterId',
+                'BatterSide', 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Top/Bottom', 'Pitcher', 
+                'PitcherId', 'PitcherThrows', 'Catcher', 'CatcherId', 'CatcherThrows', 'league_name', 
+                'Level', 'division_name', 'League', 'stadium_name', 'Stadium', 'AutoPitchType',
+                'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult']
+        filt = ['GameID', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
+                'PitcherId', 'PitcherThrows', 'Batter', 'BatterId', 'BatterSide', 'Catcher',
+                'CatcherId', 'CatcherThrows', 'league_name', 'Level', 'division_name', 'League',
+                'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Outs', 'Balls', 'Strikes', 'RelSpeed', 'VertBreak',
+                'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 'Extension', 'AutoPitchType',
+                'TaggedPitchType', 'PitchCall', 'PlateLocHeight','PlateLocSide', 'ExitSpeed', 'Angle', 'Direction',
+                'HitSpinRate', 'TaggedHitType', 'Distance', 'HangTime', 'Bearing','PlayResult', 'OutsOnPlay', 'RunsScored', 'ThrowSpeed',
+                'PopTime']
         
         self.data = pd.DataFrame(cur.fetchall(), columns=cols)[filt]
         conn.close()

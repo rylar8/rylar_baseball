@@ -4,7 +4,22 @@ import sqlite3
 import pandas as pd
 
 class Game:
-    def __init__(self, data):
+    def __init__(self):
+        pass
+
+    def loadCSV(self, csv):
+        self.data = pd.read_csv(csv)
+        self.stadium = self.data.iloc[0]['Stadium']
+        self.league = self.data.iloc[0]['Level']
+        self.division = self.data.iloc[0]['League']
+        self.trackman_id = self.data.iloc[0]['GameID']
+        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
+        self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
+        self.time = self.data.iloc[0]['Time']
+        self.home = Team(self.data.iloc[0]['HomeTeam'])
+        self.away = Team(self.data.iloc[0]['AwayTeam'])
+
+    def loadDF(self, data):
         self.data = data
         self.stadium = self.data.iloc[0]['Stadium']
         self.league = self.data.iloc[0]['Level']
@@ -13,8 +28,77 @@ class Game:
         self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
         self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
         self.time = self.data.iloc[0]['Time']
-        self.home = Team(data.iloc[0]['HomeTeam'])
-        self.away = Team(data.iloc[0]['AwayTeam'])
+        self.home = Team(self.data.iloc[0]['HomeTeam'])
+        self.away = Team(self.data.iloc[0]['AwayTeam'])
+
+    def loadID(self, game_id):
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+
+        cur.execute('''SELECT trackman.*, 
+                    games.trackman_id AS trackman_game_id, 
+                    batters.batter_name AS batter_name, batters.trackman_id AS batter_trackman_id, 
+                    batter_side.side AS batter_side,
+                    home_teams.team_name AS home_name, home_teams.trackman_name AS home_trackman_id,
+                    away_teams.team_name AS away_name, away_teams.trackman_name AS away_trackman_id,
+                    inning_split.split AS top_bottom,
+                    pitchers.pitcher_name AS pitcher_name, pitchers.trackman_id AS pitcher_trackman_id,
+                    pitcher_side.side AS pitcher_side,
+                    catchers.catcher_name AS catcher_name, catchers.trackman_id AS catcher_trackman_id,
+                    catcher_side.side AS catcher_side,
+                    leagues.league_name AS league_name, leagues.trackman_name AS league_trackman_id,
+                    divisions.division_name AS division_name, divisions.trackman_name AS division_trackman_id,
+                    stadiums.stadium_name AS stadium_name, stadiums.trackman_name AS stadium_trackman_id,
+                    auto_pitches.auto_pitch AS auto_pitch_type,
+                    tagged_pitches.tagged_pitch AS tagged_pitch_type,
+                    calls.call AS pitch_call,
+                    hits.hit AS hit_type,
+                    results.result AS result
+
+                    FROM trackman 
+
+                    LEFT JOIN games ON trackman.game_id = games.game_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    LEFT JOIN sides AS batter_side ON batters.batter_side_id = batter_side.side_id
+                    LEFT JOIN teams AS home_teams ON trackman.home_id = home_teams.team_id
+                    LEFT JOIN teams AS away_teams ON trackman.away_id = away_teams.team_id
+                    LEFT JOIN inning_split ON trackman.top_bottom_id = inning_split.split_id
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN sides AS pitcher_side ON pitchers.pitcher_side_id = pitcher_side.side_id
+                    LEFT JOIN catchers ON trackman.catcher_id = catchers.catcher_id
+                    LEFT JOIN sides AS catcher_side ON catchers.catcher_side_id = catcher_side.side_id
+                    LEFT JOIN leagues ON trackman.league_id = leagues.league_id
+                    LEFT JOIN divisions ON trackman.division_id = divisions.division_id
+                    LEFT JOIN stadiums ON games.stadium_id = stadiums.stadium_id
+                    LEFT JOIN pitches AS auto_pitches ON trackman.auto_type_id = auto_pitches.type_id
+                    LEFT JOIN pitches AS tagged_pitches ON trackman.tagged_type_id = tagged_pitches.type_id
+                    LEFT JOIN calls ON trackman.call_id = calls.type_id
+                    LEFT JOIN hits ON trackman.hit_type_id = hits.type_id
+                    LEFT JOIN results ON trackman.result_id = results.type_id
+
+                    WHERE games.trackman_id = ?''', (game_id,))
+        
+        cols = ['game_id', 'pitch_num', 'inning', 'top_bottom_id', 'pa_of_inning', 'pitch_of_pa', 'pitcher_id', 'batter_id',
+                'catcher_id', 'league_id', 'division_id', 'home_id', 'away_id', 'outs', 'balls', 'strikes',
+                'velocity', 'vertical', 'induced', 'horizontal', 'spin', 'axis', 'tilt', 'release_height', 'release_side', 
+                'release_extension', 'auto_type_id', 'tagged_type_id', 'call_id', 'location_height', 'location_side', 'exit_velocity',
+                'launch_angle', 'hit_direction', 'hit_spin', 'hit_type_id', 'distance', 'hang_time', 'hit_bearing', 'result_id',
+                'outs_made', 'runs_scored', 'catcher_velocity', 'catcher_pop', 'trackman_game_id', 'batter_name', 'batter_trackman_id',
+                'batter_side', 'home_name', 'home_trackman_id', 'away_name', 'away_trackman_id', 'top_bottom', 'pitcher_name', 
+                'pitcher_trackman_id', 'pitcher_side', 'catcher_name', 'catcher_trackman_id', 'catcher_side', 'league_name', 
+                'league_trackman_id', 'division_name', 'division_trackman_id', 'stadium_name', 'stadium_trackman_id', 'auto_pitch_type',
+                'tagged_pitch_type', 'pitch_call', 'hit_type', 'result']
+        filt = ['trackman_game_id', 'pitch_num', 'inning', 'top_bottom', 'pa_of_inning', 'pitch_of_pa', 'pitcher_name',
+                'pitcher_trackman_id', 'pitcher_side', 'batter_name', 'batter_trackman_id', 'batter_side', 'catcher_name',
+                'catcher_trackman_id', 'catcher_side', 'league_name', 'league_trackman_id', 'division_name', 'division_trackman_id',
+                'home_name', 'home_trackman_id', 'away_name', 'away_trackman_id', 'outs', 'balls', 'strikes', 'velocity', 'vertical',
+                'induced', 'horizontal', 'spin', 'axis', 'tilt', 'release_height', 'release_side', 'release_extension', 'auto_pitch_type',
+                'tagged_pitch_type', 'pitch_call', 'location_height','location_side', 'exit_velocity', 'launch_angle', 'hit_direction',
+                'hit_spin', 'hit_type', 'distance', 'hang_time', 'hit_bearing','result', 'outs_made', 'runs_scored', 'catcher_velocity',
+                'catcher_pop']
+        
+        self.data = pd.DataFrame(cur.fetchall(), columns=cols)[filt]
+        conn.close()
 
     def innings(self, top_bottom):
         i = 1
@@ -28,8 +112,8 @@ class Game:
         return innings
 
     def toDatabase(self):
-        con = sqlite3.connect('rylar_baseball.db')
-        cur = con.cursor()
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
         #Add league
         try:
             #Increment league id
@@ -38,11 +122,11 @@ class Game:
             #Add new league
             cur.execute('''INSERT INTO leagues (league_id, year, trackman_name)
             VALUES (?, ?, ?);''', (league_id, self.year, self.league))
-            con.commit()
+            conn.commit()
             #Get full league name
             league_name = input(f"Input new league name ({self.league}): ")
             cur.execute('UPDATE leagues SET league_name = ? WHERE league_id = ?', (league_name, league_id))
-            con.commit()
+            conn.commit()
         except:
             #Get league id
             cur.execute('SELECT league_id FROM leagues WHERE trackman_name = ? AND year = ?', (self.league, self.year))
@@ -55,11 +139,11 @@ class Game:
             #Add new division
             cur.execute('''INSERT INTO divisions (division_id, league_id, year, trackman_name)
             VALUES (?, ?, ?, ?);''', (division_id, league_id, self.year, self.division))
-            con.commit()
+            conn.commit()
             #Get full division name
             division_name = input(f"Input new division name ({self.division}): ")
             cur.execute('UPDATE divisions SET division_name = ? WHERE division_id = ?', (division_name, division_id))
-            con.commit()
+            conn.commit()
         except:
             #Get division id
             cur.execute('SELECT division_id FROM divisions WHERE trackman_name = ? AND year = ?', (self.division, self.year))
@@ -68,32 +152,32 @@ class Game:
         try:
             cur.execute('INSERT INTO teams (trackman_name, division_id, league_id, year) VALUES (?, ?, ?, ?)', 
                         (self.home.trackman_id, division_id, league_id, self.year))
-            con.commit()
+            conn.commit()
             #Get full team name
             home_name = input(f"Input new team name ({self.home.trackman_id}): ")
             cur.execute('UPDATE teams SET team_name = ? WHERE trackman_name = ?', (home_name, self.home.trackman_id))
-            con.commit()
+            conn.commit()
         except:
             pass
         #Add away team
         try:
             cur.execute('INSERT INTO teams (trackman_name, division_id, league_id, year) VALUES (?, ?, ?, ?)', 
                     (self.away.trackman_id, division_id, league_id, self.year))
-            con.commit()
+            conn.commit()
             #Get full team name
             away_name = input(f"Input new team name ({self.away.trackman_id}): ")
             cur.execute('UPDATE teams SET team_name = ? WHERE trackman_name = ?', (away_name, self.away.trackman_id))
-            con.commit()
+            conn.commit()
         except:
             pass
         #Add stadium
         try:
             cur.execute('INSERT INTO stadiums (trackman_name) VALUES (?)', (self.stadium,))
-            con.commit()
+            conn.commit()
             #Get full stadium name
             stadium_name = input(f"Input new stadium name ({self.stadium}): ")
             cur.execute('UPDATE stadiums SET stadium_name = ? WHERE trackman_name = ?', (stadium_name, self.stadium))
-            con.commit()
+            conn.commit()
         except:
             pass
         #Get stadium id
@@ -109,7 +193,7 @@ class Game:
             #Add game
             cur.execute('''INSERT INTO games (trackman_id, date, time, stadium_id, league_id, division_id, home_id, away_id)
             VALUES (?,?,?,?,?,?,?,?)''', (self.trackman_id, str(self.date), self.time, stadium_id, league_id, division_id, home_id, away_id))
-            con.commit()
+            conn.commit()
         except:
             print(f'Game already in games table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (trackman_id = {self.trackman_id})')
         #Add batters
@@ -129,7 +213,7 @@ class Game:
             try:
                 cur.execute('''INSERT INTO batters (batter_name, team_id, trackman_id, batter_side_id)
                 VALUES (?, ?, ?, ?)''', (batter_name, team_id, batter_id, batter_side_id))
-                con.commit()
+                conn.commit()
             except:
                 pass
         #Add pitchers
@@ -149,7 +233,7 @@ class Game:
             try:
                 cur.execute('''INSERT INTO pitchers (pitcher_name, team_id, trackman_id, pitcher_side_id)
                 VALUES (?, ?, ?, ?)''', (pitcher_name, team_id, pitcher_id, pitcher_side_id))
-                con.commit()
+                conn.commit()
             except:
                 pass
 
@@ -170,7 +254,7 @@ class Game:
             try:
                 cur.execute('''INSERT INTO catchers (catcher_name, team_id, trackman_id, catcher_side_id)
                 VALUES (?, ?, ?, ?)''', (catcher_name, team_id, catcher_id, catcher_side_id))
-                con.commit()
+                conn.commit()
             except:
                 pass
         #Write Trackman data
@@ -279,9 +363,10 @@ class Game:
             hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
             ?, ?, ?, ?, ?, ?, ?, ?, ?)''', pitches)
-            con.commit()
+            conn.commit()
         except:
             print(f'Data already in trackman table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (game_id = {game_id}, trackman_id = {self.trackman_id})')
+        conn.close()
 
     def writeHitterReports():
         pass

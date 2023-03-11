@@ -10,7 +10,7 @@ class Game:
         self.league = self.data.iloc[0]['Level']
         self.division = self.data.iloc[0]['League']
         self.trackman_id = self.data.iloc[0]['GameID']
-        self.date = self.data.iloc[0]['Date']
+        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
         self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
         self.time = self.data.iloc[0]['Time']
         self.home = Team(data.iloc[0]['HomeTeam'])
@@ -86,12 +86,13 @@ class Game:
             con.commit()
         except:
             pass
+        #Add stadium
         try:
-            cur.execute('INSERT INTO stadiums (trackman_name,) VALUES (?,)', (self.stadium,))
+            cur.execute('INSERT INTO stadiums (trackman_name) VALUES (?)', (self.stadium,))
             con.commit()
             #Get full stadium name
             stadium_name = input(f"Input new stadium name ({self.stadium}): ")
-            cur.execute('UPDATE stadiums SET stadium_name =? WHERE trackman_name = ?', (stadium_name, self.stadium))
+            cur.execute('UPDATE stadiums SET stadium_name = ? WHERE trackman_name = ?', (stadium_name, self.stadium))
             con.commit()
         except:
             pass
@@ -107,10 +108,10 @@ class Game:
         try:
             #Add game
             cur.execute('''INSERT INTO games (trackman_id, date, time, stadium_id, league_id, division_id, home_id, away_id)
-            VALUES (?,?,?,?,?,?,?,?)''', (self.trackman_id, self.date, self.time, stadium_id, league_id, division_id, home_id, away_id))
+            VALUES (?,?,?,?,?,?,?,?)''', (self.trackman_id, str(self.date), self.time, stadium_id, league_id, division_id, home_id, away_id))
             con.commit()
         except:
-            print(f'Game already in games table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (gameID = {self.trackman_id})')
+            print(f'Game already in games table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (trackman_id = {self.trackman_id})')
         #Add batters
         for batter_id in set(self.data['BatterId'].dropna()):
             batter_name = self.data[self.data['BatterId'] == batter_id].iloc[0]['Batter']
@@ -229,12 +230,18 @@ class Game:
             release_height = pitch.RelHeight
             release_side = pitch.RelSide
             release_extension = pitch.Extension
-            #Get auto type id
-            cur.execute('SELECT type_id FROM pitches WHERE auto_pitch = ?', (pitch.AutoPitchType,))
-            auto_type_id = cur.fetchone()[0]
-            #Get tagged type id
-            cur.execute('SELECT type_id FROM pitches WHERE tagged_pitch = ?', (pitch.TaggedPitchType,))
-            tagged_type_id = cur.fetchone()[0]
+            #Get auto type id unless auto type is blank, set to null id
+            try:
+                cur.execute('SELECT type_id FROM pitches WHERE auto_pitch = ?', (pitch.AutoPitchType,))
+                auto_type_id = cur.fetchone()[0]
+            except TypeError:
+                auto_type_id = 9
+            #Get tagged type id unless tagged type is blank, set to null id
+            try:
+                cur.execute('SELECT type_id FROM pitches WHERE tagged_pitch = ?', (pitch.TaggedPitchType,))
+                tagged_type_id = cur.fetchone()[0]
+            except TypeError:
+                tagged_type_id = 9
             #Get call id
             cur.execute('SELECT type_id FROM calls WHERE call = ?', (pitch.PitchCall,))
             call_id = cur.fetchone()[0]
@@ -264,15 +271,17 @@ class Game:
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
             hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop))
 
-
-        cur.executemany('''INSERT INTO trackman (game_id, pitch_num, inning, top_bottom_id, pa_of_inning, pitch_of_pa,
-        pitcher_id, batter_id, catcher_id, league_id, division_id, home_id, away_id, outs, balls, strikes, velocity, 
-        vertical, induced, horizontal, spin, axis, tilt, release_height, release_side, release_extension, auto_type_id,
-        tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
-        hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-        ?, ?, ?, ?, ?, ?, ?, ?, ?)''', pitches)
-        con.commit()
+        try:
+            cur.executemany('''INSERT INTO trackman (game_id, pitch_num, inning, top_bottom_id, pa_of_inning, pitch_of_pa,
+            pitcher_id, batter_id, catcher_id, league_id, division_id, home_id, away_id, outs, balls, strikes, velocity, 
+            vertical, induced, horizontal, spin, axis, tilt, release_height, release_side, release_extension, auto_type_id,
+            tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
+            hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+            ?, ?, ?, ?, ?, ?, ?, ?, ?)''', pitches)
+            con.commit()
+        except:
+            print(f'Data already in trackman table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (game_id = {game_id}, trackman_id = {self.trackman_id})')
 
     def writeHitterReports():
         pass

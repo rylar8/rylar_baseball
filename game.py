@@ -2,6 +2,7 @@ from inning import Inning
 from team import Team
 import sqlite3
 import pandas as pd
+from openpyxl import load_workbook
 
 class Game:
     def __init__(self):
@@ -53,7 +54,10 @@ class Game:
                     tagged_pitches.tagged_pitch AS tagged_pitch_type,
                     calls.call AS pitch_call,
                     hits.hit AS hit_type,
-                    results.result AS result
+                    results.result AS result,
+                    batter_teams.trackman_name AS batter_team_trackman_id,
+                    pitcher_teams.trackman_name AS pitcher_team_trackman_id,
+                    catcher_teams.trackman_name AS catcher_team_trackman_id
 
                     FROM trackman 
 
@@ -75,6 +79,9 @@ class Game:
                     LEFT JOIN calls ON trackman.call_id = calls.type_id
                     LEFT JOIN hits ON trackman.hit_type_id = hits.type_id
                     LEFT JOIN results ON trackman.result_id = results.type_id
+                    LEFT JOIN teams AS batter_teams ON batters.team_id = batter_teams.team_id
+                    LEFT JOIN teams AS pitcher_teams ON pitchers.team_id = pitcher_teams.team_id
+                    LEFT JOIN teams AS catcher_teams ON catchers.team_id = catcher_teams.team_id
 
                     WHERE games.trackman_id = ?''', (game_id,))
         
@@ -87,10 +94,10 @@ class Game:
                 'BatterSide', 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Top/Bottom', 'Pitcher', 
                 'PitcherId', 'PitcherThrows', 'Catcher', 'CatcherId', 'CatcherThrows', 'league_name', 
                 'Level', 'division_name', 'League', 'stadium_name', 'Stadium', 'AutoPitchType',
-                'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult']
+                'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult', 'BatterTeam', 'PitcherTeam', 'CatcherTeam']
         filt = ['GameID', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
-                'PitcherId', 'PitcherThrows', 'Batter', 'BatterId', 'BatterSide', 'Catcher',
-                'CatcherId', 'CatcherThrows', 'league_name', 'Level', 'division_name', 'League',
+                'PitcherId', 'PitcherThrows', 'PitcherTeam', 'Batter', 'BatterId', 'BatterSide', 'BatterTeam', 'Catcher',
+                'CatcherId', 'CatcherThrows', 'CatcherTeam', 'league_name', 'Level', 'division_name', 'League',
                 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Outs', 'Balls', 'Strikes', 'RelSpeed', 'VertBreak',
                 'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 'Extension', 'AutoPitchType',
                 'TaggedPitchType', 'PitchCall', 'PlateLocHeight','PlateLocSide', 'ExitSpeed', 'Angle', 'Direction',
@@ -368,8 +375,69 @@ class Game:
             print(f'Data already in trackman table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (game_id = {game_id}, trackman_id = {self.trackman_id})')
         conn.close()
 
-    def writeHitterReports():
-        pass
+    def writeHitterReports(self, team_id):
+        temp_path = 'templates//postgame_hitter_template.xlsx'
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+        #Get batters from data
+        batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
+        #Write a new report for each batter id
+        for batter_id in batters:
+            temp = load_workbook(temp_path)
+            wb = temp.active
+            #Get a tuple of unique at bats for batter
+            at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning']].apply(lambda row : (row['Inning'], row['PAofInning']), axis=1))
+            player_name = self.data[self.data['BatterId'] == batter_id]['Batter'].iloc[0]
+            date = self.data[self.data['BatterId'] == batter_id]['Date'].iloc[0]
+            #Get full team name from data base and then just select the last name (usually the mascot)
+            cur.execute(f'SELECT team_name FROM teams WHERE trackman_name = ?', (self.data[self.data['BatterId'] == batter_id]['PitcherTeam'].iloc[0],))
+            opponent = f'v {cur.fetchone()[0].split()[-1]}'
+            i = 1
+            #Fill an at bat on the sheet for each at bat
+            for at_bat in at_bats:
+                inning = at_bat[0]
+                pa_of_inning = at_bat[1]
+                #Get at bat data
+                at_bat_data = self.data[self.data['PAofInning'] == pa_of_inning & self.data['Inning'] == inning]
+                outs = at_bat_data['Outs'].iloc[0]
+                runners = 'Coming Soon'
+                pitcher_name = at_bat_data['Pitcher'].iloc[0]
+                pitcher_id = at_bat_data['PitcherId'].iloc[0]
+                pitcher_throws = at_bat_data['PitcherThrows'].iloc[0]
+                #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
+                try:
+                    #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
+                    pitcher_velo = self.data[(self.data['TaggedPitchType'] == 'Fastball' | self.data['TaggedPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
+                    #Get a list of the different pitches thrown
+                    pitch_mix = list(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType']))
+                except:
+                    #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
+                    pitcher_velo = self.data[(self.data['AutoPitchType'] == 'Four-Seam' | self.data['AutoPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
+                    #Get a list of the different pitches thrown
+                    pitch_mix = list(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType']))
+                #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
+                try:
+                    exit_velo = at_bat_data['ExitSpeed'].iloc[-1]
+                except:
+                    exit_velo = ''
+                #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
+                try:
+                    launch_angle = at_bat_data['Angle'].iloc[-1]
+                except:
+                    launch_angle = ''
+                #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
+                try:
+                    hit_type = at_bat_data['TaggedHitType'].iloc[-1]
+                except:
+                    hit_type = ''
+                #Try to get result on last pitch of at bat, if an error occurs leave it blank
+                try:
+                    result = at_bat_data['PlayResult'].iloc[-1]
+                except:
+                    result = ''
+                qab = 'Coming Soon'
+            temp.close()
+        conn.close()
 
     def writePitcherReports():
         pass

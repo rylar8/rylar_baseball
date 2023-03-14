@@ -1,5 +1,6 @@
 from inning import Inning
 from team import Team
+from atbat import AtBat
 import sqlite3
 import pandas as pd
 from openpyxl import load_workbook
@@ -386,7 +387,7 @@ class Game:
             temp = load_workbook(temp_path)
             wb = temp.active
             #Get a tuple of unique at bats for batter
-            at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning']].apply(lambda row : (row['Inning'], row['PAofInning']), axis=1))
+            at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1))
             player_name = self.data[self.data['BatterId'] == batter_id]['Batter'].iloc[0]
             date = self.data[self.data['BatterId'] == batter_id]['Date'].iloc[0]
             #Get full team name from data base and then just select the last name (usually the mascot)
@@ -395,15 +396,17 @@ class Game:
             i = 1
             #Fill an at bat on the sheet for each at bat
             for at_bat in at_bats:
+                #Initialize at_bat object
                 inning = at_bat[0]
                 pa_of_inning = at_bat[1]
-                #Get at bat data
-                at_bat_data = self.data[self.data['PAofInning'] == pa_of_inning & self.data['Inning'] == inning]
-                outs = at_bat_data['Outs'].iloc[0]
+                top_bottom = at_bat[2]
+                at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
+            
+                outs = at_bat.outs
                 runners = 'Coming Soon'
-                pitcher_name = at_bat_data['Pitcher'].iloc[0]
-                pitcher_id = at_bat_data['PitcherId'].iloc[0]
-                pitcher_throws = at_bat_data['PitcherThrows'].iloc[0]
+                pitcher_name = at_bat.pitcher
+                pitcher_id = at_bat.pitcher_id
+                pitcher_throws = at_bat.pitcher_throws
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 try:
                     #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
@@ -417,25 +420,26 @@ class Game:
                     pitch_mix = list(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType']))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    exit_velo = at_bat_data['ExitSpeed'].iloc[-1]
+                    exit_velo = at_bat.pitches()[-1].exit_velocity
                 except:
                     exit_velo = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    launch_angle = at_bat_data['Angle'].iloc[-1]
+                    launch_angle = at_bat.pitches()[-1].launch_angle
                 except:
                     launch_angle = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    hit_type = at_bat_data['TaggedHitType'].iloc[-1]
+                    hit_type = at_bat.pitches()[-1].hit_type
                 except:
                     hit_type = ''
                 #Try to get result on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    result = at_bat_data['PlayResult'].iloc[-1]
+                    result = at_bat.pitches()[-1].result
                 except:
                     result = ''
                 qab = 'Coming Soon'
+                
             temp.close()
         conn.close()
 

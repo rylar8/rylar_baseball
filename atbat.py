@@ -22,15 +22,19 @@ class AtBat():
             self.batter_id = self.data['BatterId'].iloc[0]
             self.pitcher = self.data['Pitcher'].iloc[0]
             self.pitcher_id = self.data['PitcherId'].iloc[0]
+            self.pitcher_throws = self.data['PitcherThrows'].iloc[0]
             self.catcher = self.data['Catcher'].iloc[0]
             self.catcher_id = self.data['CatcherId'].iloc[0]
+            self.outs = self.data['Outs'].iloc[0]
         except IndexError:
             self.batter = self.data['Batter']
             self.batter_id = self.data['BatterId']
             self.pitcher = self.data['Pitcher']
             self.pitcher_id = self.data['PitcherId']
+            self.pitcher_throws = self.data['PitcherThrows']
             self.catcher = self.data['Catcher']
             self.catcher_id = self.data['CatcherId']
+            self.outs = self.data['Outs']
 
     def pitches(self):
         i = 1

@@ -1,6 +1,7 @@
 from inning import Inning
 from team import Team
 from atbat import AtBat
+import player
 import sqlite3
 import pandas as pd
 from openpyxl import load_workbook
@@ -9,7 +10,7 @@ class Game:
     def __init__(self):
         pass
 
-    def loadCSV(self, csv):
+    def loadCSV(self, csv, writeData = True):
         self.data = pd.read_csv(csv)
         self.stadium = self.data.iloc[0]['Stadium']
         self.league = self.data.iloc[0]['Level']
@@ -20,8 +21,10 @@ class Game:
         self.time = self.data.iloc[0]['Time']
         self.home = Team(self.data.iloc[0]['HomeTeam'])
         self.away = Team(self.data.iloc[0]['AwayTeam'])
+        if writeData:
+            self.toDatabase()
 
-    def loadDF(self, data):
+    def loadDF(self, data, writeData = True):
         self.data = data
         self.stadium = self.data.iloc[0]['Stadium']
         self.league = self.data.iloc[0]['Level']
@@ -32,6 +35,8 @@ class Game:
         self.time = self.data.iloc[0]['Time']
         self.home = Team(self.data.iloc[0]['HomeTeam'])
         self.away = Team(self.data.iloc[0]['AwayTeam'])
+        if writeData:
+            self.toDatabase()
 
     def loadID(self, game_id):
         conn = sqlite3.connect('rylar_baseball.db')
@@ -118,6 +123,18 @@ class Game:
             else:
                 break
         return innings
+    
+    def batters(self):
+        batter_ids = set(self.data['BatterId'])
+        return [player.Batter(batter_id) for batter_id in batter_ids]
+
+    def catchers(self):
+        catcher_ids = set(self.data['CatcherId'])
+        return [player.Catcher(catcher_id) for catcher_id in catcher_ids]
+
+    def pitchers(self):
+        pitcher_ids = set(self.data['PitcherId'])
+        return [player.Pitcher(pitcher_id) for pitcher_id in pitcher_ids]
 
     def toDatabase(self):
         conn = sqlite3.connect('rylar_baseball.db')
@@ -384,29 +401,35 @@ class Game:
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
         #Write a new report for each batter id
         for batter_id in batters:
+            #Initialize template
             temp = load_workbook(temp_path)
             wb = temp.active
+
+            #Initialize batter object
+            batter = player.Batter(batter_id)
+            batter_name = batter.name
+            date = self.date
+
             #Get a tuple of unique at bats for batter
             at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1))
-            player_name = self.data[self.data['BatterId'] == batter_id]['Batter'].iloc[0]
-            date = self.data[self.data['BatterId'] == batter_id]['Date'].iloc[0]
-            #Get full team name from data base and then just select the last name (usually the mascot)
-            cur.execute(f'SELECT team_name FROM teams WHERE trackman_name = ?', (self.data[self.data['BatterId'] == batter_id]['PitcherTeam'].iloc[0],))
-            opponent = f'v {cur.fetchone()[0].split()[-1]}'
+            #Fill an at bat on the sheet for each at bat, use i to control what cell to write in
             i = 1
-            #Fill an at bat on the sheet for each at bat
-            for at_bat in at_bats:
+            for ab in at_bats:
                 #Initialize at_bat object
-                inning = at_bat[0]
-                pa_of_inning = at_bat[1]
-                top_bottom = at_bat[2]
+                inning = ab[0]
+                pa_of_inning = ab[1]
+                top_bottom = ab[2]
                 at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
-            
                 outs = at_bat.outs
                 runners = 'Coming Soon'
-                pitcher_name = at_bat.pitcher
-                pitcher_id = at_bat.pitcher_id
-                pitcher_throws = at_bat.pitcher_throws
+
+                #Initialize pitcher object
+                pitcher = at_bat.pitcher()
+                pitcher_name = pitcher.name
+                pitcher_id = pitcher.trackman_id
+                pitcher_throws = pitcher.throws
+                opponent = pitcher.team
+
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 try:
                     #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs

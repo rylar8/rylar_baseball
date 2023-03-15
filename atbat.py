@@ -1,5 +1,6 @@
 import pandas as pd
 from pitch import Pitch
+import player
 
 class AtBat():
     def __init__(self, data, inning, at_bat, top_bottom):
@@ -17,24 +18,8 @@ class AtBat():
         
         self.data = self.half_inning_data[self.half_inning_data['PAofInning'] == at_bat]
         self.number = at_bat
-        try:
-            self.batter = self.data['Batter'].iloc[0]
-            self.batter_id = self.data['BatterId'].iloc[0]
-            self.pitcher = self.data['Pitcher'].iloc[0]
-            self.pitcher_id = self.data['PitcherId'].iloc[0]
-            self.pitcher_throws = self.data['PitcherThrows'].iloc[0]
-            self.catcher = self.data['Catcher'].iloc[0]
-            self.catcher_id = self.data['CatcherId'].iloc[0]
-            self.outs = self.data['Outs'].iloc[0]
-        except IndexError:
-            self.batter = self.data['Batter']
-            self.batter_id = self.data['BatterId']
-            self.pitcher = self.data['Pitcher']
-            self.pitcher_id = self.data['PitcherId']
-            self.pitcher_throws = self.data['PitcherThrows']
-            self.catcher = self.data['Catcher']
-            self.catcher_id = self.data['CatcherId']
-            self.outs = self.data['Outs']
+        
+        self.outs = list(self.data['Outs'])[0]
 
     def pitches(self):
         i = 1
@@ -46,3 +31,12 @@ class AtBat():
             else:
                 break
         return pitches
+    
+    def batter(self):
+        return player.Batter(list(self.data['BatterId'])[0])
+
+    def pitcher(self):
+        return player.Pitcher(list(self.data['PitcherId'])[0])
+    
+    def catcher(self):
+        return player.Catcher(list(self.data['CatcherId'])[0])

@@ -7,13 +7,14 @@ class Player():
         self.batter_side = ''
         self.throws = ''
         self.team = ''
+        self.team_trackman_id = ''
     pass
 
 class Pitcher(Player):
     def __init__(self, trackman_id):
         super().__init__(trackman_id)
 
-class Hitter(Player):
+class Batter(Player):
     def __init__(self, trackman_id):
         super().__init__(trackman_id)
 

@@ -5,6 +5,7 @@ import player
 import sqlite3
 import pandas as pd
 from openpyxl import load_workbook
+import os
 
 class Game:
     def __init__(self):
@@ -404,23 +405,19 @@ class Game:
         for batter_id in batters:
             #Initialize batter object
             batter = player.Batter(batter_id)
-            
-            wb['C3'] = batter.name
-            wb['C5'] = self.date
+            #Initialize template
+            temp = load_workbook(temp_path)
+            wb = temp.active
 
             #Get a tuple of unique at bats for batter
             at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1))
             #Fill an at bat on the sheet for each at bat, use i to control what cell to write in
             i = 0
             for ab in at_bats:
-                #Initialize template
-                temp = load_workbook(temp_path)
-                wb = temp.active
-
                 #Initialize at_bat object
                 wb[f'J{i+10}'] = inning = ab[0]
                 pa_of_inning = ab[1]
-                top_bottom = ab[2]
+                top_bottom = ab[2].lower()
                 at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
                 
                 wb[f'J{i+11}'] = at_bat.outs
@@ -430,34 +427,63 @@ class Game:
                 pitcher = at_bat.pitcher()
                 pitcher_id = pitcher.trackman_id
 
-                wb[f'J{i+14}'] = pitcher.name
-                wb[f'J{i+15}'] = pitcher.throws
-                wb['C7'] = pitcher.team
+                wb[f'J{i+14}'] = pitcher.name.split(',')[0]
+                wb[f'J{i+15}'] = pitcher.side
+
+                wb['C3'] = batter.name #Player name
+                wb['C5'] = self.date #Date
+                wb['C7'] = f'v {pitcher.team_name.split()[-1]}' #Opponent
 
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
+                #(embedded try/except statement because two different trackman versions exist)
                 try:
-                    #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
-                    wb[f'J{i+16}'] = self.data[(self.data['TaggedPitchType'] == 'Fastball' | self.data['TaggedPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
-                    #Get a list of the different pitches thrown
-                    wb[f'J{i+17}'] = list(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType']))
+                    #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
+                    mean_fb = round(self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
+                    #If only 1 fastball is thrown then std throws and error, replace std with 0
+                    try:
+                        std_fb = round(self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
+                    except:
+                        std_fb = 0
+                    wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                    #Get a list of the different pitches thrown, drop na
+                    wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna()))
                 except:
-                    #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
-                    wb[f'J{i+16}'] = self.data[(self.data['AutoPitchType'] == 'Four-Seam' | self.data['AutoPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
-                    #Get a list of the different pitches thrown
-                    wb[f'J{i+17}'] = list(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType']))
+                    try:
+                        #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
+                        mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
+                        #If only 1 fastball is thrown then std throws and error, replace std with 0
+                        try:
+                            std_fb = round(self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
+                        except:
+                            std_fb = 0
+                        wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                        #Get a list of the different pitches thrown, drop na
+                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna()))
+                    except:
+                        #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
+                        mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
+                        #If only 1 fastball is thrown then std throws and error, replace std with 0
+                        try:
+                            std_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
+                        except:
+                            std_fb = 0
+                        wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                        #Get a list of the different pitches thrown, drop na
+                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna()))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    wb[f'M{i+10}'] = at_bat.pitches()[-1].exit_velocity
+                    wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
                 except:
                      wb[f'M{i+10}'] = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
-                     wb[f'M{i+12}']  = at_bat.pitches()[-1].launch_angle
+                     wb[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
                 except:
                      wb[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
+                hits = {'Undefined' : 'Undefined', 'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
                 try:
-                     wb[f'M{i+14}']  = at_bat.pitches()[-1].hit_type
+                     wb[f'M{i+14}']  = hits[at_bat.pitches()[-1].hit_type]
                 except:
                      wb[f'M{i+14}']  = ''
                 #Try to get result on last pitch of at bat, if an error occurs leave it blank
@@ -472,8 +498,17 @@ class Game:
                 #Skip the second page header
                 if i == 45:
                     i = 51
-
-            temp.save(f'postgame_hitting_reports//{batter.team_trackman_id}//{self.date}//{batter.name}')
+            #Create folders if they do not exist
+            try:
+                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}')
+            except:
+                pass
+            try:
+                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}')
+            except:
+                pass
+            #Save file to folder with player name
+            temp.save(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
             temp.close()
         conn.close()
 

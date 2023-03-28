@@ -27,7 +27,7 @@ class Pitcher(Player):
         self.team_id = self.cur.fetchone()[0]
         #Get player team name from database
         self.cur.execute('SELECT team_name FROM teams WHERE team_id = ?', (self.team_id,))
-        self.team_id = self.cur.fetchone()[0]
+        self.team_name = self.cur.fetchone()[0]
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]
@@ -51,7 +51,7 @@ class Batter(Player):
         self.team_id = self.cur.fetchone()[0]
         #Get player team name from database
         self.cur.execute('SELECT team_name FROM teams WHERE team_id = ?', (self.team_id,))
-        self.team_id = self.cur.fetchone()[0]
+        self.team_name = self.cur.fetchone()[0]
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]
@@ -75,7 +75,7 @@ class Catcher(Player):
         self.team_id = self.cur.fetchone()[0]
         #Get player team name from database
         self.cur.execute('SELECT team_name FROM teams WHERE team_id = ?', (self.team_id,))
-        self.team_id = self.cur.fetchone()[0]
+        self.team_name = self.cur.fetchone()[0]
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]

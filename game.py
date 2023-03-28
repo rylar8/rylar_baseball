@@ -90,7 +90,7 @@ class Game:
                     LEFT JOIN teams AS catcher_teams ON catchers.team_id = catcher_teams.team_id
 
                     WHERE games.trackman_id = ?''', (game_id,))
-        
+        #Set column names to match raw trackman columns
         cols = ['game_id', 'PitchNo', 'Inning', 'top_bottom_id', 'PAofInning', 'PitchofPA', 'pitcher_id', 'batter_id',
                 'catcher_id', 'league_id', 'division_id', 'home_id', 'away_id', 'Outs', 'Balls', 'Strikes',
                 'RelSpeed', 'VertBreak', 'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 
@@ -101,6 +101,7 @@ class Game:
                 'PitcherId', 'PitcherThrows', 'Catcher', 'CatcherId', 'CatcherThrows', 'league_name', 
                 'Level', 'division_name', 'League', 'stadium_name', 'Stadium', 'AutoPitchType',
                 'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult', 'BatterTeam', 'PitcherTeam', 'CatcherTeam']
+        #Filter columns to get rid of database ids
         filt = ['GameID', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
                 'PitcherId', 'PitcherThrows', 'PitcherTeam', 'Batter', 'BatterId', 'BatterSide', 'BatterTeam', 'Catcher',
                 'CatcherId', 'CatcherThrows', 'CatcherTeam', 'league_name', 'Level', 'division_name', 'League',
@@ -401,68 +402,78 @@ class Game:
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
         #Write a new report for each batter id
         for batter_id in batters:
-            #Initialize template
-            temp = load_workbook(temp_path)
-            wb = temp.active
-
             #Initialize batter object
             batter = player.Batter(batter_id)
-            batter_name = batter.name
-            date = self.date
+            
+            wb['C3'] = batter.name
+            wb['C5'] = self.date
 
             #Get a tuple of unique at bats for batter
             at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1))
             #Fill an at bat on the sheet for each at bat, use i to control what cell to write in
-            i = 1
+            i = 0
             for ab in at_bats:
+                #Initialize template
+                temp = load_workbook(temp_path)
+                wb = temp.active
+
                 #Initialize at_bat object
-                inning = ab[0]
+                wb[f'J{i+10}'] = inning = ab[0]
                 pa_of_inning = ab[1]
                 top_bottom = ab[2]
                 at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
-                outs = at_bat.outs
-                runners = 'Coming Soon'
+                
+                wb[f'J{i+11}'] = at_bat.outs
+                wb[f'J{i+12}'] = 'Coming Soon' #Runners
 
                 #Initialize pitcher object
                 pitcher = at_bat.pitcher()
-                pitcher_name = pitcher.name
                 pitcher_id = pitcher.trackman_id
-                pitcher_throws = pitcher.throws
-                opponent = pitcher.team
+
+                wb[f'J{i+14}'] = pitcher.name
+                wb[f'J{i+15}'] = pitcher.throws
+                wb['C7'] = pitcher.team
 
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 try:
                     #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
-                    pitcher_velo = self.data[(self.data['TaggedPitchType'] == 'Fastball' | self.data['TaggedPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
+                    wb[f'J{i+16}'] = self.data[(self.data['TaggedPitchType'] == 'Fastball' | self.data['TaggedPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
                     #Get a list of the different pitches thrown
-                    pitch_mix = list(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType']))
+                    wb[f'J{i+17}'] = list(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType']))
                 except:
                     #Get the mean pitcher fb velo for 4-seam or 2-seam fastballs
-                    pitcher_velo = self.data[(self.data['AutoPitchType'] == 'Four-Seam' | self.data['AutoPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
+                    wb[f'J{i+16}'] = self.data[(self.data['AutoPitchType'] == 'Four-Seam' | self.data['AutoPitchType'] == 'Sinker') & self.data['PitcherId'] == pitcher_id]['RelSpeed'].mean()
                     #Get a list of the different pitches thrown
-                    pitch_mix = list(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType']))
+                    wb[f'J{i+17}'] = list(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType']))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    exit_velo = at_bat.pitches()[-1].exit_velocity
+                    wb[f'M{i+10}'] = at_bat.pitches()[-1].exit_velocity
                 except:
-                    exit_velo = ''
+                     wb[f'M{i+10}'] = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    launch_angle = at_bat.pitches()[-1].launch_angle
+                     wb[f'M{i+12}']  = at_bat.pitches()[-1].launch_angle
                 except:
-                    launch_angle = ''
+                     wb[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    hit_type = at_bat.pitches()[-1].hit_type
+                     wb[f'M{i+14}']  = at_bat.pitches()[-1].hit_type
                 except:
-                    hit_type = ''
+                     wb[f'M{i+14}']  = ''
                 #Try to get result on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    result = at_bat.pitches()[-1].result
+                     wb[f'M{i+15}']  = at_bat.pitches()[-1].result
                 except:
-                    result = ''
-                qab = 'Coming Soon'
+                     wb[f'M{i+15}']  = ''
+                wb[f'M{i+16}']  = 'Coming Soon' #QAB
                 
+                #Jump to next at bat slot
+                i += 9
+                #Skip the second page header
+                if i == 45:
+                    i = 51
+
+            temp.save(f'postgame_hitting_reports//{batter.team_trackman_id}//{self.date}//{batter.name}')
             temp.close()
         conn.close()
 

@@ -4,9 +4,9 @@ from atbat import AtBat
 import player
 import sqlite3
 import pandas as pd
+import numpy as np
 from openpyxl import load_workbook
 import os
-import numpy as np
 
 class Game:
     def __init__(self):
@@ -575,6 +575,7 @@ class Game:
                                 'BallIntentional' : 'Ball'}
                     wb[f'H{i+j+10}'] = results[pitch.call]
                     j+=1
+                wb.add_image(at_bat.getZoneTracer(), f'B{i+9}')
 
                 #Jump to next at bat slot
                 i += 9

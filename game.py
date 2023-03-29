@@ -64,7 +64,8 @@ class Game:
                     results.result AS result,
                     batter_teams.trackman_name AS batter_team_trackman_id,
                     pitcher_teams.trackman_name AS pitcher_team_trackman_id,
-                    catcher_teams.trackman_name AS catcher_team_trackman_id
+                    catcher_teams.trackman_name AS catcher_team_trackman_id,
+                    k_or_bb.k_or_bb AS k_or_bb
 
                     FROM trackman 
 
@@ -89,6 +90,7 @@ class Game:
                     LEFT JOIN teams AS batter_teams ON batters.team_id = batter_teams.team_id
                     LEFT JOIN teams AS pitcher_teams ON pitchers.team_id = pitcher_teams.team_id
                     LEFT JOIN teams AS catcher_teams ON catchers.team_id = catcher_teams.team_id
+                    LEFT JOIN k_or_bb ON trackman.k_or_bb_id = k_or_bb.k_or_bb_id
 
                     WHERE games.trackman_id = ?''', (game_id,))
         #Set column names to match raw trackman columns
@@ -97,11 +99,13 @@ class Game:
                 'RelSpeed', 'VertBreak', 'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 
                 'Extension', 'auto_type_id', 'tagged_type_id', 'call_id', 'PlateLocHeight', 'PlateLocSide', 'ExitSpeed',
                 'Angle', 'Direction', 'HitSpinRate', 'hit_type_id', 'Distance', 'HangTime', 'Bearing', 'result_id',
-                'OutsOnPlay', 'RunsScored', 'ThrowSpeed', 'PopTime', 'GameID', 'Batter', 'BatterId',
+                'OutsOnPlay', 'RunsScored', 'ThrowSpeed', 'PopTime', 'k_or_bb_id', 'VertApprAngle', 'HorzApprAngle', 'ZoneSpeed', 'ZoneTime', 'PositionAt110X', 'PositionAt110Y',
+                'PositionAt110Z', 'LastTrackedDistance', 'pfxx', 'pfxz', 'x0', 'y0', 'z0', 'vx0', 'vy0', 'vz0', 'ax0', 'ay0', 'az0', 
+                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis', 'GameID', 'Batter', 'BatterId',
                 'BatterSide', 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Top/Bottom', 'Pitcher', 
                 'PitcherId', 'PitcherThrows', 'Catcher', 'CatcherId', 'CatcherThrows', 'league_name', 
                 'Level', 'division_name', 'League', 'stadium_name', 'Stadium', 'AutoPitchType',
-                'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult', 'BatterTeam', 'PitcherTeam', 'CatcherTeam']
+                'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult', 'BatterTeam', 'PitcherTeam', 'CatcherTeam', 'KorBB']
         #Filter columns to get rid of database ids
         filt = ['GameID', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
                 'PitcherId', 'PitcherThrows', 'PitcherTeam', 'Batter', 'BatterId', 'BatterSide', 'BatterTeam', 'Catcher',
@@ -109,8 +113,10 @@ class Game:
                 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Outs', 'Balls', 'Strikes', 'RelSpeed', 'VertBreak',
                 'InducedVertBreak', 'HorzBreak', 'SpinRate', 'SpinAxis', 'Tilt', 'RelHeight', 'RelSide', 'Extension', 'AutoPitchType',
                 'TaggedPitchType', 'PitchCall', 'PlateLocHeight','PlateLocSide', 'ExitSpeed', 'Angle', 'Direction',
-                'HitSpinRate', 'TaggedHitType', 'Distance', 'HangTime', 'Bearing','PlayResult', 'OutsOnPlay', 'RunsScored', 'ThrowSpeed',
-                'PopTime']
+                'HitSpinRate', 'TaggedHitType', 'Distance', 'HangTime', 'Bearing','PlayResult', 'KorBB', 'OutsOnPlay', 'RunsScored', 'ThrowSpeed',
+                'PopTime', 'VertApprAngle', 'HorzApprAngle', 'ZoneSpeed', 'ZoneTime', 'PositionAt110X', 'PositionAt110Y',
+                'PositionAt110Z', 'LastTrackedDistance', 'pfxx', 'pfxz', 'x0', 'y0', 'z0', 'vx0', 'vy0', 'vz0', 'ax0', 'ay0', 'az0', 
+                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis']
         
         self.data = pd.DataFrame(cur.fetchall(), columns=cols)[filt]
         conn.close()
@@ -375,21 +381,54 @@ class Game:
             runs_scored = pitch.RunsScored
             catcher_velocity = pitch.ThrowSpeed
             catcher_pop = pitch.PopTime
+            #Get k_or_bb id
+            cur.execute('SELECT k_or_bb_id FROM k_or_bb WHERE k_or_bb = ?', (pitch.KorBB,))
+            k_or_bb_id = cur.fetchone()[0]
+            vert_approach_angle = pitch.VertApprAngle
+            horz_approach_angle = pitch.HorzApprAngle
+            zone_speed = pitch.ZoneSpeed
+            zone_time = pitch.ZoneTime
+            pos_at_110x = pitch.PositionAt110X
+            pos_at_110y = pitch.PositionAt110Y
+            pos_at_110z = pitch.PositionAt110Z
+            last_tracked_distance = pitch.LastTrackedDistance
+            last40_horz_break = pitch.pfxx
+            last40_vert_break = pitch.pfxz
+            horz_loc_50 = pitch.x0
+            from_home_loc_50 = pitch.y0
+            vert_loc_50 = pitch.z0
+            horz_velo_50 = pitch.vx0
+            from_home_velo_50 = pitch.vy0
+            vert_velo_50 = pitch.vz0
+            horz_acc_50 = pitch.ax0
+            from_home_acc_50 = pitch.ay0
+            vert_acc_50 = pitch.az0
+            con_pos_x = pitch.ContactPositionX
+            con_pos_y = pitch.ContactPositionY
+            con_pos_z = pitch.ContactPositionZ
+            hit_spin_axis = pitch.HitSpinAxis
 
             pitches.append((game_id, pitch_num, inning, top_bottom_id, pa_of_inning, pitch_of_pa,
             pitcher_id, batter_id, catcher_id, league_id, division_id, home_id, away_id, outs, balls, strikes, velocity, 
             vertical, induced, horizontal, spin, axis, tilt, release_height, release_side, release_extension, auto_type_id,
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
-            hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop))
+            hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop,
+            k_or_bb_id, vert_approach_angle, horz_approach_angle, zone_speed, zone_time, pos_at_110x, pos_at_110y, pos_at_110z,
+            last_tracked_distance, last40_horz_break, last40_vert_break, horz_loc_50, from_home_loc_50, vert_loc_50, horz_velo_50,
+            from_home_velo_50, vert_velo_50, horz_acc_50, from_home_acc_50, vert_acc_50, con_pos_x, con_pos_y, con_pos_z, hit_spin_axis))
 
         try:
             cur.executemany('''INSERT INTO trackman (game_id, pitch_num, inning, top_bottom_id, pa_of_inning, pitch_of_pa,
             pitcher_id, batter_id, catcher_id, league_id, division_id, home_id, away_id, outs, balls, strikes, velocity, 
             vertical, induced, horizontal, spin, axis, tilt, release_height, release_side, release_extension, auto_type_id,
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
-            hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop)
+            hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop, k_or_bb_id,
+            vert_approach_angle, horz_approach_angle, zone_speed, zone_time, pos_at_110x, pos_at_110y, pos_at_110z, last_tracked_distance,
+            last_40_horz_break_batter_view, last_40_vert_break_batter_view, horz_loc_50, home_loc_50, vert_loc_50,
+            horz_velo_50, home_velo_50, vert_velo_50, horz_acc_50, home_acc_50, vert_acc_50, contact_pos_x,
+            contact_pos_y, contact_pos_z, hit_spin_axis)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-            ?, ?, ?, ?, ?, ?, ?, ?, ?)''', pitches)
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', pitches)
             conn.commit()
         except:
             print(f'Data already in trackman table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (game_id = {game_id}, trackman_id = {self.trackman_id})')

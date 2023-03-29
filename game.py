@@ -6,6 +6,7 @@ import sqlite3
 import pandas as pd
 from openpyxl import load_workbook
 import os
+import numpy as np
 
 class Game:
     def __init__(self):
@@ -513,14 +514,18 @@ class Game:
                         wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    if round(at_bat.pitches()[-1].exit_velocity != float('nan')):
+                    if not np.isnan(at_bat.pitches()[-1].exit_velocity):
                         wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
+                    else:
+                        wb[f'M{i+10}'] = ''
                 except:
                      wb[f'M{i+10}'] = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
-                     if round(at_bat.pitches()[-1].launch_angle != float('nan')):
+                     if not np.isnan(at_bat.pitches()[-1].launch_angle):
                         wb[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
+                     else:
+                        wb[f'M{i+10}'] = ''
                 except:
                      wb[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
@@ -531,11 +536,46 @@ class Game:
                      wb[f'M{i+14}']  = ''
                 #Try to get result on last pitch of at bat, if an error occurs leave it blank
                 try:
-                     wb[f'M{i+15}']  = at_bat.pitches()[-1].result
+                    if at_bat.pitches()[-1].result != 'Undefined':
+                        wb[f'M{i+15}']  = at_bat.pitches()[-1].result
+                    elif at_bat.pitches()[-1].k_or_bb != 'Undefined':
+                        wb[f'M{i+15}']  = at_bat.pitches()[-1].k_or_bb
+                    elif at_bat.pitches()[-1].call == 'HitByPitch':
+                        wb[f'M{i+15}']  = 'Hit By Pitch'
+                    else:
+                        wb[f'M{i+15}'] = ''
                 except:
                      wb[f'M{i+15}']  = ''
                 wb[f'M{i+16}']  = 'Coming Soon' #QAB
                 
+                #Fill a pitch slot on the sheet for each pitch, use i and j to control what cell to write in
+                #Do not exceed 8 pitches in the pitch/choice/result columns
+                j = 0
+                for pitch in at_bat.pitches()[:8]:
+                    #Try tagged pitch type, if not use auto pitch type, if error leave blank
+                    try:
+                        wb[f'F{i+j+10}'] = pitches[pitch.tagged_type]
+                    except:
+                        try:
+                            wb[f'F{i+j+10}'] = pitches[pitch.auto_type]
+                        except:
+                            wb[f'F{i+j+10}'] = ''
+                    #Use pitch call to decide if batter swung or not
+                    takes = ['StrikeCalled', 'BallCalled', 'HitByPitch', 'BallinDirt', 'BallIntentional']
+                    swings = ['InPlay', 'StrikeSwinging', 'FoulBall']
+                    if pitch.call in takes:
+                        wb[f'G{i+j+10}'] = 'Take'
+                    elif pitch.call in swings:
+                        wb[f'G{i+j+10}'] = 'Swing'
+                    else:
+                        wb[f'G{i+j+10}'] = ''
+                    #Results dictionary to fit result in cell
+                    results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
+                                'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
+                                'BallIntentional' : 'Ball'}
+                    wb[f'H{i+j+10}'] = results[pitch.call]
+                    j+=1
+
                 #Jump to next at bat slot
                 i += 9
                 #Skip the second page header

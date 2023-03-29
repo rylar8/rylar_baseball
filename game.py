@@ -433,7 +433,8 @@ class Game:
                 wb['C3'] = batter.name #Player name
                 wb['C5'] = self.date #Date
                 wb['C7'] = f'v {pitcher.team_name.split()[-1]}' #Opponent
-
+                pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
+                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 #(embedded try/except statement because two different trackman versions exist)
                 try:
@@ -446,7 +447,7 @@ class Game:
                         std_fb = 0
                     wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                     #Get a list of the different pitches thrown, drop na
-                    wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna()))
+                    wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna().map(pitches)))
                 except:
                     try:
                         #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
@@ -458,7 +459,7 @@ class Game:
                             std_fb = 0
                         wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                         #Get a list of the different pitches thrown, drop na
-                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna()))
+                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                     except:
                         #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
                         mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
@@ -469,7 +470,7 @@ class Game:
                             std_fb = 0
                         wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                         #Get a list of the different pitches thrown, drop na
-                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna()))
+                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
                     wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'

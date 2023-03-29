@@ -409,8 +409,9 @@ class Game:
             temp = load_workbook(temp_path)
             wb = temp.active
 
-            #Get a tuple of unique at bats for batter
-            at_bats = set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1))
+            #Get a tuple of unique at bats for batter and sort in order
+            at_bats = sorted(set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
+        
             #Fill an at bat on the sheet for each at bat, use i to control what cell to write in
             i = 0
             for ab in at_bats:
@@ -473,16 +474,18 @@ class Game:
                         wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
-                    wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
+                    if round(at_bat.pitches()[-1].exit_velocity != float('nan')):
+                        wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
                 except:
                      wb[f'M{i+10}'] = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
-                     wb[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
+                     if round(at_bat.pitches()[-1].launch_angle != float('nan')):
+                        wb[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
                 except:
                      wb[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
-                hits = {'Undefined' : 'Undefined', 'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
+                hits = {'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
                 try:
                      wb[f'M{i+14}']  = hits[at_bat.pitches()[-1].hit_type]
                 except:

@@ -6,6 +6,9 @@ import sqlite3
 import pandas as pd
 import numpy as np
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as PYXLImage
+from openpyxl.styles import PatternFill
+from PIL import Image as PILImage
 import os
 
 class Game:
@@ -432,8 +435,6 @@ class Game:
 
     def writeHitterReports(self, team_id):
         temp_path = 'templates//postgame_hitter_template.xlsx'
-        conn = sqlite3.connect('rylar_baseball.db')
-        cur = conn.cursor()
         #Get batters from data
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
         #Write a new report for each batter id
@@ -441,8 +442,8 @@ class Game:
             #Initialize batter object
             batter = player.Batter(batter_id)
             #Initialize template
-            temp = load_workbook(temp_path)
-            wb = temp.active
+            wb = load_workbook(temp_path)
+            ws = wb.active
 
             #Get a tuple of unique at bats for batter and sort in order
             at_bats = sorted(set(self.data[self.data['BatterId'] == batter_id][['PAofInning', 'Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['PAofInning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
@@ -451,26 +452,30 @@ class Game:
             i = 0
             for ab in at_bats:
                 #Initialize at_bat object
-                wb[f'J{i+10}'] = inning = ab[0]
+                ws[f'J{i+10}'] = inning = ab[0]
                 pa_of_inning = ab[1]
                 top_bottom = ab[2].lower()
                 at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
                 
-                wb[f'J{i+11}'] = at_bat.outs
-                wb[f'J{i+12}'] = 'Coming Soon' #Runners
+                ws[f'J{i+11}'] = at_bat.outs
+                ws[f'J{i+12}'] = 'Coming Soon' #Home
+                ws[f'J{i+13}'] = 'Coming Soon' #Away
+                ws[f'J{i+14}'] = 'Coming Soon' #Runners
 
                 #Initialize pitcher object
                 pitcher = at_bat.pitcher()
                 pitcher_id = pitcher.trackman_id
 
-                wb[f'J{i+14}'] = pitcher.name.split(',')[0]
-                wb[f'J{i+15}'] = pitcher.side
+                ws[f'J{i+16}'] = pitcher.name.split(',')[0]
+                ws[f'J{i+17}'] = pitcher.side
 
-                wb['C3'] = batter.name #Player name
-                wb['C5'] = self.date #Date
-                wb['C7'] = f'v {pitcher.team_name.split()[-1]}' #Opponent
+                ws['C3'] = ws['C53'] = batter.name #Player name
+                ws['C5'] = ws['C55'] = self.date #Date
+                ws['C7'] = ws['C57'] = f'v {pitcher.team_name.split()[-1]}' #Opponent
                 pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
                 'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
+                pitch_colors = {'Fastball': '00FF0000', 'Four-Seam': '00FF0000', 'ChangeUp': '0000BFFF', 'Changeup': '0000BFFF', 'Slider': '0000FA9A',
+                        'Cutter': '007CFC00','Curveball': '0032CD32', 'Splitter': '00ADD8E6', 'Sinker': '00FF7F50', 'Knuckleball': '0048D1CC'}
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 #(embedded try/except statement because two different trackman versions exist)
                 try:
@@ -481,9 +486,9 @@ class Game:
                         std_fb = round(self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
                     except:
                         std_fb = 0
-                    wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                    ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                     #Get a list of the different pitches thrown, drop na
-                    wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna().map(pitches)))
+                    ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna().map(pitches)))
                 except:
                     try:
                         #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
@@ -493,9 +498,9 @@ class Game:
                             std_fb = round(self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
                         except:
                             std_fb = 0
-                        wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                        ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                         #Get a list of the different pitches thrown, drop na
-                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
+                        ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                     except:
                         #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
                         mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
@@ -504,79 +509,93 @@ class Game:
                             std_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
                         except:
                             std_fb = 0
-                        wb[f'J{i+16}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                        ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
                         #Get a list of the different pitches thrown, drop na
-                        wb[f'J{i+17}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
+                        ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
                     if not np.isnan(at_bat.pitches()[-1].exit_velocity):
-                        wb[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
+                        ws[f'M{i+10}'] = f'{round(at_bat.pitches()[-1].exit_velocity, 2)} MPH'
                     else:
-                        wb[f'M{i+10}'] = ''
+                        ws[f'M{i+10}'] = ''
                 except:
-                     wb[f'M{i+10}'] = ''
+                     ws[f'M{i+10}'] = ''
                 #Try to get launch angle on last pitch of at bat, if an error occurs leave it blank
                 try:
                      if not np.isnan(at_bat.pitches()[-1].launch_angle):
-                        wb[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
+                        ws[f'M{i+12}']  = f'{round(at_bat.pitches()[-1].launch_angle, 2)}{chr(176)}'
                      else:
-                        wb[f'M{i+10}'] = ''
+                        ws[f'M{i+12}'] = ''
                 except:
-                     wb[f'M{i+12}']  = ''
+                     ws[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
                 hits = {'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
                 try:
-                     wb[f'M{i+14}']  = hits[at_bat.pitches()[-1].hit_type]
+                     ws[f'M{i+14}']  = hits[at_bat.pitches()[-1].hit_type]
                 except:
-                     wb[f'M{i+14}']  = ''
+                     ws[f'M{i+14}']  = ''
                 #Try to get result on last pitch of at bat, if an error occurs leave it blank
                 try:
                     if at_bat.pitches()[-1].result != 'Undefined':
-                        wb[f'M{i+15}']  = at_bat.pitches()[-1].result
+                        ws[f'M{i+16}']  = at_bat.pitches()[-1].result
                     elif at_bat.pitches()[-1].k_or_bb != 'Undefined':
-                        wb[f'M{i+15}']  = at_bat.pitches()[-1].k_or_bb
+                        ws[f'M{i+16}']  = at_bat.pitches()[-1].k_or_bb
                     elif at_bat.pitches()[-1].call == 'HitByPitch':
-                        wb[f'M{i+15}']  = 'Hit By Pitch'
+                        ws[f'M{i+16}']  = 'Hit By Pitch'
                     else:
-                        wb[f'M{i+15}'] = ''
+                        ws[f'M{i+16}'] = ''
                 except:
-                     wb[f'M{i+15}']  = ''
-                wb[f'M{i+16}']  = 'Coming Soon' #QAB
+                     ws[f'M{i+16}']  = ''
+                ws[f'M{i+18}']  = 'Coming Soon' #QAB
                 
                 #Fill a pitch slot on the sheet for each pitch, use i and j to control what cell to write in
                 #Do not exceed 8 pitches in the pitch/choice/result columns
                 j = 0
-                for pitch in at_bat.pitches()[:8]:
+                for pitch in at_bat.pitches()[:10]:
                     #Try tagged pitch type, if not use auto pitch type, if error leave blank
                     try:
-                        wb[f'F{i+j+10}'] = pitches[pitch.tagged_type]
+                        ws[f'F{i+j+10}'] = pitches[pitch.tagged_type]
+                        ws[f'F{i+j+10}'].fill = PatternFill('solid', fgColor=pitch_colors[pitch.tagged_type])
                     except:
                         try:
-                            wb[f'F{i+j+10}'] = pitches[pitch.auto_type]
+                            ws[f'F{i+j+10}'] = pitches[pitch.auto_type]
+                            ws[f'F{i+j+10}'].fill = PatternFill('solid', fgColor=pitch_colors[pitch.auto_type])
                         except:
-                            wb[f'F{i+j+10}'] = ''
+                            ws[f'F{i+j+10}'] = ''
+                            ws[f'F{i+j+10}'].fill = PatternFill('solid', fgColor='00000000')
                     #Use pitch call to decide if batter swung or not
                     takes = ['StrikeCalled', 'BallCalled', 'HitByPitch', 'BallinDirt', 'BallIntentional']
                     swings = ['InPlay', 'StrikeSwinging', 'FoulBall']
                     if pitch.call in takes:
-                        wb[f'G{i+j+10}'] = 'Take'
+                        ws[f'G{i+j+10}'] = 'Take'
                     elif pitch.call in swings:
-                        wb[f'G{i+j+10}'] = 'Swing'
+                        ws[f'G{i+j+10}'] = 'Swing'
                     else:
-                        wb[f'G{i+j+10}'] = ''
+                        ws[f'G{i+j+10}'] = ''
                     #Results dictionary to fit result in cell
                     results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
                                 'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
                                 'BallIntentional' : 'Ball'}
-                    wb[f'H{i+j+10}'] = results[pitch.call]
+                    ws[f'H{i+j+10}'] = results[pitch.call]
                     j+=1
-                wb.add_image(at_bat.getZoneTracer(), f'B{i+9}')
+
+                #Get image from at_bat object
+                img_path = at_bat.getZoneTracer()
+
+                #Resize the image to better fit excel sheet using PIL library
+                img = PILImage.open(img_path)
+                img_resized = img.resize((int(img.width*.83), int(img.height*.55)))
+                img_resized.save(img_path, 'PNG')
+                img.close()
+
+                #Add image to at_bat
+                ws.add_image(PYXLImage(img_path), f'C{i+10}')
 
                 #Jump to next at bat slot
-                i += 9
+                i += 11
                 #Skip the second page header
-                if i == 45:
-                    i = 51
+                if i == 44:
+                    i = 50
             #Create folders if they do not exist
             try:
                 os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}')
@@ -587,9 +606,13 @@ class Game:
             except:
                 pass
             #Save file to folder with player name
-            temp.save(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
-            temp.close()
-        conn.close()
+            wb.save(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
+            wb.close()
+        
+        #After writing all reports remove all of the temporary figures
+        for filename in os.listdir('temporary_figures'):
+            file_path = os.path.join('temporary_figures//', filename)
+            os.remove(file_path)
 
     def writePitcherReports():
         pass

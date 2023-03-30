@@ -3,7 +3,6 @@ from pitch import Pitch
 import player
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Polygon
-from openpyxl.drawing.image import Image
 
 class AtBat():
     def __init__(self, data, inning, at_bat, top_bottom):
@@ -23,6 +22,7 @@ class AtBat():
         self.number = at_bat
     
         self.outs = list(self.data['Outs'])[0]
+        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
 
     def pitches(self):
         pitches = []
@@ -32,13 +32,13 @@ class AtBat():
     
     def getZoneTracer(self):
         #Colors for pitch types
-        pitch_colors = {'Fastball' : 'Red' , 'Four-Seam': 'Red', 'ChangeUp' : 'Blue', 'Changeup' : 'Blue','Slider' : 'Green', 'Cutter' : 'DarkGreen',
-                'Curveball' : 'LimeGreen' , 'Splitter' : 'LightBlue', 'Sinker' : 'Orange', 'Knuckleball' : 'Turquoise'}
+        pitch_colors = {'Fastball': '#FF0000', 'Four-Seam': '#FF0000', 'ChangeUp': '#00BFFF', 'Changeup': '#00BFFF', 'Slider': '#00FA9A',
+                        'Cutter': '#7CFC00','Curveball': '#32CD32', 'Splitter': '#ADD8E6', 'Sinker': '#FF7F50', 'Knuckleball': '#48D1CC'}
         
         #Initialize blank plot
-        fig, ax = plt.subplots(figsize = (3, 6))
-        ax.set_xlim(-1.5,1.5)
-        ax.set_ylim(0,6)
+        fig, ax = plt.subplots(figsize = (2.5, 5))
+        ax.set_xlim(-1.25,1.25)
+        ax.set_ylim(0,5) 
         for spine in ax.spines.values():
             spine.set_visible(False)
         ax.axes.xaxis.set_visible(False)
@@ -70,22 +70,24 @@ class AtBat():
                     c.append('White')
             n += 1
         
-        #Move pitches so that they show up on the plot
-        x = [min(max(loc, -1.25), 1.25) for loc in x]
-        y = [min(max(loc, 1), 5.5) for loc in y]
+        #Move pitches so that they show up on the plot, with .25 of buffer from edges
+        x = [min(max(loc, -1), 1) for loc in x]
+        y = [min(max(loc, 0.25), 4.75) for loc in y]
 
         #Make dataframe with the lists
         df = pd.DataFrame({'x' : x, 'y' : y, 'c' : c})
 
         #Make scatterplot from dataframe
-        plt.scatter(x = df.x, y = df.y, c = df.c, s = 175, zorder = 3, linewidths = .35, edgecolors = 'Black')
+        plt.scatter(x = df.x, y = df.y, c = df.c, s = 225, zorder = 3, linewidths = .35, edgecolors = 'Black')
+        #Annotate pitch number of at bat
         for i in range(len(x)):
-            plt.annotate(l[i], (x[i], y[i]), xytext = (x[i]-.045, y[i]-.056), fontsize = 9)
+            plt.annotate(l[i], (x[i], y[i]), xytext = (x[i]-.055, y[i]-.056), fontsize = 12)
         #Save figure in temporary holding spot so it can be anchored in excel sheet
-        plt.savefig('temporary_figures//zone_tracer.png', transparent = True)
+        plt.tight_layout()
+        plt.savefig(f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png', transparent = True)
         plt.close()
 
-        return Image('temporary_figures//zone_tracer.png')
+        return f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png'
 
     def batter(self):
         return player.Batter(list(self.data['BatterId'])[0])

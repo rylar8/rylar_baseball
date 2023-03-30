@@ -8,12 +8,6 @@ class Team():
         games = []
         return games
 
-    def addGame(self, game):
-        pass
-
-    def addPlayer(self):
-        pass
-
     def players(self):
         pass
 
@@ -21,6 +15,12 @@ class Team():
         pass
 
     def hitters(self):
+        pass
+
+    def addGame(self, game):
+        pass
+
+    def addPlayer(self):
         pass
 
     def writeHitterScouting(self):

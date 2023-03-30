@@ -1,6 +1,5 @@
 import sqlite3
 
-
 class Player():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id

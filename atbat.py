@@ -30,6 +30,15 @@ class AtBat():
             pitches.append(Pitch(self.game_data, self.inning, self.number, i+1, self.top_bottom))
         return pitches
     
+    def batter(self):
+        return player.Batter(list(self.data['BatterId'])[0])
+
+    def pitcher(self):
+        return player.Pitcher(list(self.data['PitcherId'])[0])
+    
+    def catcher(self):
+        return player.Catcher(list(self.data['CatcherId'])[0])
+    
     def getZoneTracer(self):
         #Colors for pitch types
         pitch_colors = {'Fastball': '#FF0000', 'Four-Seam': '#FF0000', 'ChangeUp': '#00BFFF', 'Changeup': '#00BFFF', 'Slider': '#00FA9A',
@@ -88,12 +97,3 @@ class AtBat():
         plt.close()
 
         return f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png'
-
-    def batter(self):
-        return player.Batter(list(self.data['BatterId'])[0])
-
-    def pitcher(self):
-        return player.Pitcher(list(self.data['PitcherId'])[0])
-    
-    def catcher(self):
-        return player.Catcher(list(self.data['CatcherId'])[0])

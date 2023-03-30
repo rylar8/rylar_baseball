@@ -123,14 +123,9 @@ class Game:
         conn.close()
 
     def innings(self, top_bottom):
-        i = 1
         innings = []
-        while True: 
-            if len(Inning(self.data, i, top_bottom).data) > 0:
-                innings.append(Inning(self.data, i, top_bottom))
-                i += 1
-            else:
-                break
+        for i in range(len(set(self.data[self.data['Top/Bottom'] == top_bottom.capitalize()]['Inning']))):
+            innings.append(Inning(self.data, i+1, top_bottom))
         return innings
     
     def batters(self):

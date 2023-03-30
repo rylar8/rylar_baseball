@@ -17,12 +17,7 @@ class Inning():
         self.number = inning
 
     def at_bats(self):
-        i = 1
         at_bats = []
-        while True: 
-            if len(AtBat(self.game_data, self.number, i, self.top_bottom).data) > 0:
-                at_bats.append(AtBat(self.game_data, self.number, i, self.top_bottom))
-                i += 1
-            else:
-                break
+        for i in range(len(set(self.data['PAofInning']))):
+            at_bats.append(AtBat(self.game_data, self.number, i+1, self.top_bottom))
         return at_bats

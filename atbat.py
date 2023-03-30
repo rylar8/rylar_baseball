@@ -21,18 +21,13 @@ class AtBat():
         
         self.data = self.half_inning_data[self.half_inning_data['PAofInning'] == at_bat]
         self.number = at_bat
-
-        self.outs = self.data['Outs']
+    
+        self.outs = list(self.data['Outs'])[0]
 
     def pitches(self):
-        i = 1
         pitches = []
-        while True: 
-            if len(Pitch(self.game_data, self.inning, self.number, i, self.top_bottom).data) > 0:
-                pitches.append(Pitch(self.game_data, self.inning, self.number, i, self.top_bottom))
-                i += 1
-            else:
-                break
+        for i in range(len(set(self.data['PitchofPA']))):
+            pitches.append(Pitch(self.game_data, self.inning, self.number, i+1, self.top_bottom))
         return pitches
     
     def getZoneTracer(self):

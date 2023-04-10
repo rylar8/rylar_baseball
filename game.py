@@ -614,5 +614,71 @@ class Game:
             file_path = os.path.join('temporary_figures//', filename)
             os.remove(file_path)
 
-    def writePitcherReports():
-        pass
+    def writePitcherReports(self, team_id):
+        temp_path = 'templates//postgame_pitcher_template.xlsx'
+        #Get pitchers from data
+        pitchers = set(self.data[self.data['PitcherTeam'] == team_id]['PitcherId'])
+        #Write a new report for each pitcher id
+        for pitcher_id in pitchers:
+            #Initialize pitcher object
+            pitcher = player.Pitcher(pitcher_id)
+            #Initialize template
+            wb = load_workbook(temp_path)
+            ws = wb.active
+            
+            #Get pitcher's overall game data
+            overall_data = self.data[self.data['Pitcher_Id'] == pitcher_id]
+            pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
+                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
+            pitch_colors = {'Fastball': '00FF0000', 'Four-Seam': '00FF0000', 'ChangeUp': '0000BFFF', 'Changeup': '0000BFFF', 'Slider': '0000FA9A',
+                        'Cutter': '007CFC00','Curveball': '0032CD32', 'Splitter': '00ADD8E6', 'Sinker': '00FF7F50', 'Knuckleball': '0048D1CC'}
+            
+            #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
+            #(embedded try/except statement because two different trackman versions exist in league data)
+
+            #Get a set of the pitch types
+            try:
+                ovr_pitch_types = set(overall_data[overall_data['TaggedPitchType']]['TaggedPitchType'].dropna())
+            except:
+                ovr_pitch_types = set(overall_data[overall_data['AutoPitchType']]['AutoPitchType'].dropna())
+            
+            i = 0
+            for pitch_type in ovr_pitch_types:
+                #Get pitch type data
+                try:
+                    pitch_data = overall_data[overall_data['TaggedPitchType'] == pitch_type]
+                except:
+                    pitch_data = overall_data[overall_data['AutoPitchType'] == pitch_type]
+    
+                ws[f'F{i+10}'] = pitches[pitch_type] #Pitch type
+                ws[f'G{i+10}'] = round(pitch_data['RelSpeed'].dropna().max(), 1) #Max velo
+                ws[f'H{i+10}'] = round(pitch_data['RelSpeed'].dropna().mean(), 1) #Mean velo
+                ws[f'I{i+10}'] = round(pitch_data['InducedVertBreak'].dropna().mean(), 1) #Vert break
+                ws[f'J{i+10}'] = round(pitch_data['HorzBreak'].dropna().mean(), 1) #Horz break
+                ws[f'K{i+10}'] = f'{round(len(pitch_data) / len(overall_data), 1) * 100}%' #Usage
+
+                results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
+                            'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
+                            'BallIntentional' : 'Ball'}
+                #Get strike rate
+                strikes = pitch_data['PitchCall'].apply(results)
+                #ws[f'K{i+10}'] = f'{strikes / len(overall_data), 1) * 100}%' #Usage
+                
+
+
+                
+
+
+
+
+
+            #Get a tuple of unique innings for pitcher and sort in order
+            innings = sorted(set(self.data[self.data['PitcherId'] == pitcher_id][['Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
+
+            #Fill an inning on the sheet for each inning pitched, use i to control what cell to write in
+            i = 0
+            for inn in innings:
+                #Initialize inning object
+                inn_num = inn[0]
+                top_bottom = inn[1].lower()
+                inning = Inning(self.data, inn_num, top_bottom)

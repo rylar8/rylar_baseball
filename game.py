@@ -8,6 +8,7 @@ import numpy as np
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as PYXLImage
 from openpyxl.styles import PatternFill
+from openpyxl.styles import Font
 from PIL import Image as PILImage
 import os
 
@@ -437,6 +438,21 @@ class Game:
         temp_path = 'templates//postgame_hitter_template.xlsx'
         #Get batters from data
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
+
+        #Define dictionaries to be used later
+        pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
+                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
+        pitch_colors = {'Fastball': '00FF0000', 'Four-Seam': '00FF0000', 'ChangeUp': '0000BFFF', 'Changeup': '0000BFFF', 'Slider': '0000FA9A',
+                'Cutter': '007CFC00','Curveball': '0032CD32', 'Splitter': '00ADD8E6', 'Sinker': '00FF7F50', 'Knuckleball': '0048D1CC'}
+        hits = {'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
+        #Simplify pitch call to fit on sheet easier
+        results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
+                                'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
+                                'BallIntentional' : 'Ball'}
+        #Use pitch call to decide if batter swung or not
+        takes = ['StrikeCalled', 'BallCalled', 'HitByPitch', 'BallinDirt', 'BallIntentional']
+        swings = ['InPlay', 'StrikeSwinging', 'FoulBall']
+
         #Write a new report for each batter id
         for batter_id in batters:
             #Initialize batter object
@@ -472,46 +488,30 @@ class Game:
                 ws['C3'] = ws['C53'] = batter.name #Player name
                 ws['C5'] = ws['C55'] = self.date #Date
                 ws['C7'] = ws['C57'] = f'v {pitcher.team_name.split()[-1]}' #Opponent
-                pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
-                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
-                pitch_colors = {'Fastball': '00FF0000', 'Four-Seam': '00FF0000', 'ChangeUp': '0000BFFF', 'Changeup': '0000BFFF', 'Slider': '0000FA9A',
-                        'Cutter': '007CFC00','Curveball': '0032CD32', 'Splitter': '00ADD8E6', 'Sinker': '00FF7F50', 'Knuckleball': '0048D1CC'}
-                #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
+
+                #Try using the tagged fastball data, if an error occurs use the auto pitch type data
                 #(embedded try/except statement because two different trackman versions exist)
                 try:
-                    #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
-                    mean_fb = round(self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
-                    #If only 1 fastball is thrown then std throws and error, replace std with 0
+                    pitcher_fastballs = self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]
+                except:
                     try:
-                        std_fb = round(self.data[((self.data['TaggedPitchType'] == 'Fastball') | (self.data['TaggedPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
+                        pitcher_fastballs = self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]
                     except:
-                        std_fb = 0
+                        pitcher_fastballs = self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]
+                #Get the mean and std pitcher fb velo
+                mean_fb = round(pitcher_fastballs['RelSpeed'].dropna().mean())
+                #If only 1 fastball is thrown then std throws and error, replace std with 0
+                try:
+                    std_fb = round(pitcher_fastballs['RelSpeed'].dropna().std())
+                except:
+                    std_fb = 0
                     ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
+                try:
                     #Get a list of the different pitches thrown, drop na
                     ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['TaggedPitchType'].dropna().map(pitches)))
                 except:
-                    try:
-                        #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
-                        mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
-                        #If only 1 fastball is thrown then std throws and error, replace std with 0
-                        try:
-                            std_fb = round(self.data[((self.data['AutoPitchType'] == 'Four-Seam') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
-                        except:
-                            std_fb = 0
-                        ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
-                        #Get a list of the different pitches thrown, drop na
-                        ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
-                    except:
-                        #Get the mean and std pitcher fb velo for 4-seam or 2-seam fastballs
-                        mean_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().mean())
-                        #If only 1 fastball is thrown then std throws and error, replace std with 0
-                        try:
-                            std_fb = round(self.data[((self.data['AutoPitchType'] == 'Fastball') | (self.data['AutoPitchType'] == 'Sinker')) & (self.data['PitcherId'] == pitcher_id)]['RelSpeed'].dropna().std())
-                        except:
-                            std_fb = 0
-                        ws[f'J{i+18}'] = f'{mean_fb-std_fb}-{mean_fb+std_fb} MPH'
-                        #Get a list of the different pitches thrown, drop na
-                        ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
+                    ws[f'J{i+19}'] = ','.join(set(self.data[self.data['PitcherId'] == pitcher_id]['AutoPitchType'].dropna().map(pitches)))
+                   
                 #Try to get exit velo on last pitch of at bat, if an error occurs leave it blank
                 try:
                     if not np.isnan(at_bat.pitches()[-1].exit_velocity):
@@ -529,7 +529,6 @@ class Game:
                 except:
                      ws[f'M{i+12}']  = ''
                 #Try to get hit type on last pitch of at bat, if an error occurs leave it blank
-                hits = {'Popup' : 'Popup', 'LineDrive' : 'Line Drive', 'GroundBall' : 'Ground Ball', 'FlyBall' : 'Fly Ball', 'Bunt' : 'Bunt'}
                 try:
                      ws[f'M{i+14}']  = hits[at_bat.pitches()[-1].hit_type]
                 except:
@@ -563,19 +562,14 @@ class Game:
                         except:
                             ws[f'F{i+j+10}'] = ''
                             ws[f'F{i+j+10}'].fill = PatternFill('solid', fgColor='00000000')
-                    #Use pitch call to decide if batter swung or not
-                    takes = ['StrikeCalled', 'BallCalled', 'HitByPitch', 'BallinDirt', 'BallIntentional']
-                    swings = ['InPlay', 'StrikeSwinging', 'FoulBall']
+                    
                     if pitch.call in takes:
                         ws[f'G{i+j+10}'] = 'Take'
                     elif pitch.call in swings:
                         ws[f'G{i+j+10}'] = 'Swing'
                     else:
                         ws[f'G{i+j+10}'] = ''
-                    #Results dictionary to fit result in cell
-                    results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
-                                'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
-                                'BallIntentional' : 'Ball'}
+        
                     ws[f'H{i+j+10}'] = results[pitch.call]
                     j+=1
 
@@ -618,6 +612,16 @@ class Game:
         temp_path = 'templates//postgame_pitcher_template.xlsx'
         #Get pitchers from data
         pitchers = set(self.data[self.data['PitcherTeam'] == team_id]['PitcherId'])
+
+        #Define dictionaries to be used later
+        pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
+                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
+        pitch_colors = {'FB': '00FF0000', 'FB': '00FF0000', 'CH': '0000BFFF', 'CH': '0000BFFF', 'SL': '0000FA9A',
+                    'CUT': '007CFC00','CB': '0032CD32', 'SP': '00ADD8E6', '2FB': '00FF7F50', 'KN': '0048D1CC'}
+        results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
+                        'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
+                        'BallIntentional' : 'Ball'}
+
         #Write a new report for each pitcher id
         for pitcher_id in pitchers:
             #Initialize pitcher object
@@ -627,23 +631,27 @@ class Game:
             ws = wb.active
             
             #Get pitcher's overall game data
-            overall_data = self.data[self.data['Pitcher_Id'] == pitcher_id]
-            pitches = {'Fastball' : 'FB' , 'Four-Seam': 'FB', 'ChangeUp' : 'CH', 'Changeup' : 'CH','Slider' : 'SL', 'Cutter' : 'CUT',
-                'Curveball' : 'CB' , 'Splitter' : 'SP', 'Sinker' : '2FB', 'Knuckleball' : 'KN'}
-            pitch_colors = {'Fastball': '00FF0000', 'Four-Seam': '00FF0000', 'ChangeUp': '0000BFFF', 'Changeup': '0000BFFF', 'Slider': '0000FA9A',
-                        'Cutter': '007CFC00','Curveball': '0032CD32', 'Splitter': '00ADD8E6', 'Sinker': '00FF7F50', 'Knuckleball': '0048D1CC'}
+            overall_data = self.data[self.data['PitcherId'] == pitcher_id]
             
             #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
             #(embedded try/except statement because two different trackman versions exist in league data)
 
             #Get a set of the pitch types
             try:
-                ovr_pitch_types = set(overall_data[overall_data['TaggedPitchType']]['TaggedPitchType'].dropna())
+                ovr_pitch_types = set(overall_data['TaggedPitchType'].dropna())
             except:
-                ovr_pitch_types = set(overall_data[overall_data['AutoPitchType']]['AutoPitchType'].dropna())
+                ovr_pitch_types = set(overall_data['AutoPitchType'].dropna())
             
+            #To protect against there being no pitch tagging data, if there is only 1 tagged type (likely Undefined), then default to auto
+            if len(ovr_pitch_types) <= 1:
+                ovr_pitch_types = set(overall_data['AutoPitchType'].dropna())
+
+            #Sort the pitches by usage
+            pitch_counts = overall_data['TaggedPitchType'].value_counts()
+            sorted_pitches = sorted(ovr_pitch_types, key=lambda pitch_type : pitch_counts.loc[pitch_type], reverse=True)
+        
             i = 0
-            for pitch_type in ovr_pitch_types:
+            for pitch_type in sorted_pitches:
                 #Get pitch type data
                 try:
                     pitch_data = overall_data[overall_data['TaggedPitchType'] == pitch_type]
@@ -651,26 +659,25 @@ class Game:
                     pitch_data = overall_data[overall_data['AutoPitchType'] == pitch_type]
     
                 ws[f'F{i+10}'] = pitches[pitch_type] #Pitch type
+                ws[f'F{i+10}'].fill = PatternFill('solid', fgColor=pitch_colors[pitches[pitch_type]])
                 ws[f'G{i+10}'] = round(pitch_data['RelSpeed'].dropna().max(), 1) #Max velo
                 ws[f'H{i+10}'] = round(pitch_data['RelSpeed'].dropna().mean(), 1) #Mean velo
                 ws[f'I{i+10}'] = round(pitch_data['InducedVertBreak'].dropna().mean(), 1) #Vert break
                 ws[f'J{i+10}'] = round(pitch_data['HorzBreak'].dropna().mean(), 1) #Horz break
-                ws[f'K{i+10}'] = f'{round(len(pitch_data) / len(overall_data), 1) * 100}%' #Usage
-
-                results = {'StrikeCalled' : 'Strike', 'StrikeSwinging' : 'Strike', 'FoulBall' : 'Foul', 'InPlay' : 'In Play',
-                            'BallCalled' : 'Ball', 'HitByPitch' : 'HBP', 'BallinDirt' : 'Ball', 'Undefined' : '', 
-                            'BallIntentional' : 'Ball'}
+                ws[f'K{i+10}'] = f'{round(len(pitch_data) / len(overall_data) * 100, 1)}%' #Usage
+        
                 #Get strike rate
-                strikes = pitch_data['PitchCall'].apply(results)
-                #ws[f'K{i+10}'] = f'{strikes / len(overall_data), 1) * 100}%' #Usage
+                calls = pitch_data['PitchCall'].map(results)
+                ws[f'L{i+10}'] = strikerate = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(pitch_data) * 100, 1)}%'
                 
-
-
+                #Get hard hit rate, leave blank if no balls in play
+                if len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) == 0:
+                    ws[f'M{i+10}'] = '-'
+                    ws[f'M{i+10}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'M{i+10}'] = f'{round(len(pitch_data[(pitch_data["ExitSpeed"] >= 95) & (pitch_data["PitchCall"] == "InPlay")]) / len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) * 100, 1)}%'
                 
-
-
-
-
+                i += 2
 
             #Get a tuple of unique innings for pitcher and sort in order
             innings = sorted(set(self.data[self.data['PitcherId'] == pitcher_id][['Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
@@ -682,3 +689,22 @@ class Game:
                 inn_num = inn[0]
                 top_bottom = inn[1].lower()
                 inning = Inning(self.data, inn_num, top_bottom)
+
+
+             #Create folders if they do not exist
+            try:
+                os.mkdir(f'postgame_pitcher_reports//{pitcher.team_trackman_id}')
+            except:
+                pass
+            try:
+                os.mkdir(f'postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}')
+            except:
+                pass
+            #Save file to folder with player name
+            wb.save(f'postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}//{pitcher.name}.xlsx')
+            wb.close()
+        
+        #After writing all reports remove all of the temporary figures
+        for filename in os.listdir('temporary_figures'):
+            file_path = os.path.join('temporary_figures//', filename)
+            os.remove(file_path)

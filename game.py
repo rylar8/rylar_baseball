@@ -11,6 +11,7 @@ from openpyxl.styles import PatternFill
 from openpyxl.styles import Font
 from PIL import Image as PILImage
 import os
+import matplotlib.pyplot as plt
 
 class Game:
     def __init__(self):
@@ -144,6 +145,80 @@ class Game:
         pitcher_ids = set(self.data['PitcherId'])
         return [player.Pitcher(pitcher_id) for pitcher_id in pitcher_ids]
 
+    def adjustZone(self, stadium_id):
+        #Get a center of mass on the entire league and then adjust the points in this stadiums data so that the center of mass is the same
+        pass
+    
+    def pitcherStatline(self, pitcher_id):
+        #Define what a hit is
+        hits = ['Single', 'Double', 'Triple', 'HomeRun']
+        #Get pitcher data
+        pitcher_data = self.data[self.data['PitcherId'] == pitcher_id]
+        K = len(pitcher_data[pitcher_data['KorBB'] == 'Strikeout'])
+        R = pitcher_data.RunsScored.sum()
+        H = len(pitcher_data[pitcher_data['PlayResult'].isin(hits)])
+        BB = len(pitcher_data[pitcher_data['KorBB'] == 'Walk'])
+        HBP = len(pitcher_data[pitcher_data['PitchCall'] == 'HitByPitch'])
+
+        return f'{K} K, {R} R, {H} H, {BB} BB, {HBP} HBP'
+
+    def movementPlot(self, pitcher_id, view = 'pitcher'):
+        if view == 'pitcher':
+            mirror = 1
+        elif view == 'catcher':
+            mirror = -1
+        else:
+            raise Exception('View must be either "pitcher" or "catcher"')
+        
+        #Colors for pitch types
+        pitch_colors = {'Fastball': '#FF0000', 'Four-Seam': '#FF0000', 'ChangeUp': '#00BFFF', 'Changeup': '#00BFFF', 'Slider': '#00FA9A',
+                        'Cutter': '#7CFC00','Curveball': '#32CD32', 'Splitter': '#ADD8E6', 'Sinker': '#FF7F50', 'Knuckleball': '#48D1CC'}
+
+        pitcher_data = self.data[self.data['PitcherId'] == pitcher_id]
+
+        fig, ax = plt.subplots(figsize = (2.5, 2.95))
+        ax.set_xlim(-30,30)
+        ax.set_ylim(-30,30)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(True)
+        ax.spines['left'].set_visible(True)
+        ax.spines['left'].set_position('zero')
+        ax.spines['bottom'].set_position('zero')
+        ax.axes.xaxis.set_visible(True)
+        ax.axes.yaxis.set_visible(True)
+        ax.spines['bottom'].set_linewidth(2)
+        ax.spines['left'].set_linewidth(2)
+        ax.spines['left'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.tick_params(axis = 'both', which= 'both', bottom = False, left = False, labelleft = False, labelbottom = False)
+
+        x = []
+        y = []
+        n = []
+        c = []
+        
+        df = pd.DataFrame({'x': x,
+                    'y': y,
+                    'c': c})
+
+        groups = df.groupby('c')
+        
+        for name, group in groups:
+            plt.scatter(group.x, group.y, s = 100, zorder = 3, color = group.c, edgecolors= 'Black', linewidths = .45)
+        
+        try:
+            os.mkdir(f'c:\\Users\\rlars\Desktop\Knights Baseball\Postgame Reports\\2022 Postgame Excel Sheets\{date[:3]}\{date}\Pitch Break Graphics')
+        except:
+            pass
+        newPath = f'c:\\Users\\rlars\Desktop\Knights Baseball\Postgame Reports\\2022 Postgame Excel Sheets\{date[:3]}\{date}\Pitch Break Graphics\{pitcher}.png'
+        
+        plt.savefig(newPath, bbox_inches='tight', transparent = True)
+        plt.close()
+
+        return Image(newPath)
+        
+    
     def toDatabase(self):
         conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
@@ -574,7 +649,7 @@ class Game:
                     j+=1
 
                 #Get image from at_bat object
-                img_path = at_bat.getZoneTracer()
+                img_path = at_bat.zoneTracer(view='catcher')
 
                 #Resize the image to better fit excel sheet using PIL library
                 img = PILImage.open(img_path)
@@ -609,6 +684,9 @@ class Game:
             os.remove(file_path)
 
     def writePitcherReports(self, team_id):
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+
         temp_path = 'templates//postgame_pitcher_template.xlsx'
         #Get pitchers from data
         pitchers = set(self.data[self.data['PitcherTeam'] == team_id]['PitcherId'])
@@ -632,6 +710,14 @@ class Game:
             
             #Get pitcher's overall game data
             overall_data = self.data[self.data['PitcherId'] == pitcher_id]
+
+            #Get opponent team name from database
+            cur.execute('SELECT team_name FROM teams WHERE trackman_name = ?', (overall_data.BatterTeam.iloc[0],))
+            opponent = cur.fetchone()[0]
+
+            ws['C3'] = ws['C84'] = pitcher.name #Player name
+            ws['C5'] = ws['C86'] = self.date #Date
+            ws['C7'] = ws['C88'] = f'v {opponent.split()[-1]}' #Opponent
             
             #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
             #(embedded try/except statement because two different trackman versions exist in league data)
@@ -649,7 +735,8 @@ class Game:
             #Sort the pitches by usage
             pitch_counts = overall_data['TaggedPitchType'].value_counts()
             sorted_pitches = sorted(ovr_pitch_types, key=lambda pitch_type : pitch_counts.loc[pitch_type], reverse=True)
-        
+            
+            #Fill a row for each pitch type, using i to control the row
             i = 0
             for pitch_type in sorted_pitches:
                 #Get pitch type data
@@ -668,7 +755,7 @@ class Game:
         
                 #Get strike rate
                 calls = pitch_data['PitchCall'].map(results)
-                ws[f'L{i+10}'] = strikerate = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(pitch_data) * 100, 1)}%'
+                ws[f'L{i+10}'] = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(pitch_data) * 100, 1)}%'
                 
                 #Get hard hit rate, leave blank if no balls in play
                 if len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) == 0:
@@ -676,20 +763,186 @@ class Game:
                     ws[f'M{i+10}'].font = Font(bold=True, italic=True, size=20)
                 else:
                     ws[f'M{i+10}'] = f'{round(len(pitch_data[(pitch_data["ExitSpeed"] >= 95) & (pitch_data["PitchCall"] == "InPlay")]) / len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) * 100, 1)}%'
+
+                #Get chase rate, leave blank if no balls thrown
+                #Get balls based on universal strike zone
+                balls = pitch_data[(pitch_data['PlateLocSide'] < -0.7508) | (pitch_data['PlateLocSide'] > 0.7508) | (pitch_data['PlateLocHeight'] < 1.5942) | (pitch_data['PlateLocHeight'] > 3.6033)]
+                chase = balls[(balls['PitchCall'] == 'FoulBall') | (balls['PitchCall'] == 'InPlay') | (balls['PitchCall'] == 'StrikeSwinging')]
+                if len(balls) == 0:
+                    ws[f'N{i+10}'] = '-'
+                    ws[f'N{i+10}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'N{i+10}'] = f'{round(len(chase) / len(balls) * 100, 1)}%'
+
+                #Get whiff rate, leave blank if no swings
+                swings = pitch_data[(pitch_data['PitchCall'] == 'FoulBall') | (pitch_data['PitchCall'] == 'InPlay') | (pitch_data['PitchCall'] == 'StrikeSwinging')]
+                whiffs = swings[swings['PitchCall'] == 'StrikeSwinging']
+                if len(swings) == 0:
+                    ws[f'O{i+10}'] = '-'
+                    ws[f'O{i+10}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'O{i+10}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
                 
+                #Advance to next pitch, if pitcher threw 6+ pitch types then skip the least used pitches
                 i += 2
+                if i == 10:
+                    break
+
+            #Fill overall data
+
+            #Get strike rate
+            calls = overall_data['PitchCall'].map(results)
+            ws[f'L{20}'] = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(overall_data) * 100, 1)}%'
+            
+            #Get hard hit rate, leave blank if no balls in play
+            if len(overall_data[overall_data["PitchCall"] == "InPlay"]) == 0:
+                ws[f'M{20}'] = '-'
+                ws[f'M{20}'].font = Font(bold=True, italic=True, size=20)
+            else:
+                ws[f'M{20}'] = f'{round(len(overall_data[(overall_data["ExitSpeed"] >= 95) & (overall_data["PitchCall"] == "InPlay")]) / len(overall_data[overall_data["PitchCall"] == "InPlay"]) * 100, 1)}%'
+
+            #Get chase rate, leave blank if no balls thrown
+            #Get balls based on universal strike zone
+            balls = overall_data[(overall_data['PlateLocSide'] < -0.7508) | (overall_data['PlateLocSide'] > 0.7508) | (overall_data['PlateLocHeight'] < 1.5942) | (overall_data['PlateLocHeight'] > 3.6033)]
+            chase = balls[(balls['PitchCall'] == 'FoulBall') | (balls['PitchCall'] == 'InPlay') | (balls['PitchCall'] == 'StrikeSwinging')]
+            if len(balls) == 0:
+                ws[f'N{20}'] = '-'
+                ws[f'N{20}'].font = Font(bold=True, italic=True, size=20)
+            else:
+                ws[f'N{20}'] = f'{round(len(chase) / len(balls) * 100, 1)}%'
+
+            #Get whiff rate, leave blank if no swings
+            swings = overall_data[(overall_data['PitchCall'] == 'FoulBall') | (overall_data['PitchCall'] == 'InPlay') | (overall_data['PitchCall'] == 'StrikeSwinging')]
+            whiffs = swings[swings['PitchCall'] == 'StrikeSwinging']
+            if len(swings) == 0:
+                ws[f'O{20}'] = '-'
+                ws[f'O{20}'].font = Font(bold=True, italic=True, size=20)
+            else:
+                ws[f'O{20}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
+
+            ws[f'G{22}'] = self.pitcherStatline(pitcher_id)
 
             #Get a tuple of unique innings for pitcher and sort in order
             innings = sorted(set(self.data[self.data['PitcherId'] == pitcher_id][['Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
 
-            #Fill an inning on the sheet for each inning pitched, use i to control what cell to write in
-            i = 0
+            #Fill an inning on the sheet for each inning pitched, use j to control what cell to write in
+            j = 15
             for inn in innings:
                 #Initialize inning object
                 inn_num = inn[0]
                 top_bottom = inn[1].lower()
                 inning = Inning(self.data, inn_num, top_bottom)
 
+                #Get pitcher's inning data
+                inning_data = inning.data[inning.data['PitcherId'] == pitcher_id]
+                
+                #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
+                #(embedded try/except statement because two different trackman versions exist in league data)
+
+                #Get a set of the pitch types
+                try:
+                    inn_pitch_types = set(inning_data['TaggedPitchType'].dropna())
+                except:
+                    inn_pitch_types = set(inning_data['AutoPitchType'].dropna())
+                
+                #To protect against there being no pitch tagging data, if there is only 1 tagged type (likely Undefined), then default to auto
+                if len(inn_pitch_types) <= 1:
+                    inn_pitch_types = set(inning_data['AutoPitchType'].dropna())
+
+                #Sort the pitches by usage
+                pitch_counts = inning_data['TaggedPitchType'].value_counts()
+                sorted_pitches = sorted(inn_pitch_types, key=lambda pitch_type : pitch_counts.loc[pitch_type], reverse=True)
+
+                #Fill a row for each pitch type, using i to control the row
+                i = 0
+                for pitch_type in sorted_pitches:
+                    #Get pitch type data
+                    try:
+                        pitch_data = inning_data[inning_data['TaggedPitchType'] == pitch_type]
+                    except:
+                        pitch_data = inning_data[inning_data['AutoPitchType'] == pitch_type]
+        
+                    ws[f'F{i+10+j}'] = pitches[pitch_type] #Pitch type
+                    ws[f'F{i+10+j}'].fill = PatternFill('solid', fgColor=pitch_colors[pitches[pitch_type]])
+                    ws[f'G{i+10+j}'] = round(pitch_data['RelSpeed'].dropna().max(), 1) #Max velo
+                    ws[f'H{i+10+j}'] = round(pitch_data['RelSpeed'].dropna().mean(), 1) #Mean velo
+                    ws[f'I{i+10+j}'] = round(pitch_data['InducedVertBreak'].dropna().mean(), 1) #Vert break
+                    ws[f'J{i+10+j}'] = round(pitch_data['HorzBreak'].dropna().mean(), 1) #Horz break
+                    ws[f'K{i+10+j}'] = f'{round(len(pitch_data) / len(overall_data) * 100, 1)}%' #Usage
+            
+                    #Get strike rate
+                    calls = pitch_data['PitchCall'].map(results)
+                    ws[f'L{i+10+j}'] = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(pitch_data) * 100, 1)}%'
+                    
+                    #Get hard hit rate, leave blank if no balls in play
+                    if len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) == 0:
+                        ws[f'M{i+10+j}'] = '-'
+                        ws[f'M{i+10+j}'].font = Font(bold=True, italic=True, size=20)
+                    else:
+                        ws[f'M{i+10+j}'] = f'{round(len(pitch_data[(pitch_data["ExitSpeed"] >= 95) & (pitch_data["PitchCall"] == "InPlay")]) / len(pitch_data[pitch_data["PitchCall"] == "InPlay"]) * 100, 1)}%'
+
+                    #Get chase rate, leave blank if no balls thrown
+                    #Get balls based on universal strike zone
+                    balls = pitch_data[(pitch_data['PlateLocSide'] < -0.7508) | (pitch_data['PlateLocSide'] > 0.7508) | (pitch_data['PlateLocHeight'] < 1.5942) | (pitch_data['PlateLocHeight'] > 3.6033)]
+                    chase = balls[(balls['PitchCall'] == 'FoulBall') | (balls['PitchCall'] == 'InPlay') | (balls['PitchCall'] == 'StrikeSwinging')]
+                    if len(balls) == 0:
+                        ws[f'N{i+10+j}'] = '-'
+                        ws[f'N{i+10+j}'].font = Font(bold=True, italic=True, size=20)
+                    else:
+                        ws[f'N{i+10+j}'] = f'{round(len(chase) / len(balls) * 100, 1)}%'
+
+                    #Get whiff rate, leave blank if no swings
+                    swings = pitch_data[(pitch_data['PitchCall'] == 'FoulBall') | (pitch_data['PitchCall'] == 'InPlay') | (pitch_data['PitchCall'] == 'StrikeSwinging')]
+                    whiffs = swings[swings['PitchCall'] == 'StrikeSwinging']
+                    if len(swings) == 0:
+                        ws[f'O{i+10+j}'] = '-'
+                        ws[f'O{i+10+j}'].font = Font(bold=True, italic=True, size=20)
+                    else:
+                        ws[f'O{i+10+j}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
+                    
+                    #Advance to next pitch, if pitcher threw 6+ pitch types then skip the least used pitches
+                    i += 2
+                    if i == 10:
+                        break
+
+                #Fill overall data
+
+                #Get strike rate
+                calls = inning_data['PitchCall'].map(results)
+                ws[f'L{20+j}'] = f'{round(len(calls[(calls == "Strike") | (calls == "Foul") | (calls == "In Play")]) / len(inning_data) * 100, 1)}%'
+                
+                #Get hard hit rate, leave blank if no balls in play
+                if len(inning_data[inning_data["PitchCall"] == "InPlay"]) == 0:
+                    ws[f'M{20+j}'] = '-'
+                    ws[f'M{20+j}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'M{20+j}'] = f'{round(len(inning_data[(inning_data["ExitSpeed"] >= 95) & (inning_data["PitchCall"] == "InPlay")]) / len(inning_data[inning_data["PitchCall"] == "InPlay"]) * 100, 1)}%'
+
+                #Get chase rate, leave blank if no balls thrown
+                #Get balls based on universal strike zone
+                balls = inning_data[(inning_data['PlateLocSide'] < -0.7508) | (inning_data['PlateLocSide'] > 0.7508) | (inning_data['PlateLocHeight'] < 1.5942) | (inning_data['PlateLocHeight'] > 3.6033)]
+                chase = balls[(balls['PitchCall'] == 'FoulBall') | (balls['PitchCall'] == 'InPlay') | (balls['PitchCall'] == 'StrikeSwinging')]
+                if len(balls) == 0:
+                    ws[f'N{20+j}'] = '-'
+                    ws[f'N{20+j}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'N{20+j}'] = f'{round(len(chase) / len(balls) * 100, 1)}%'
+
+                #Get whiff rate, leave blank if no swings
+                swings = inning_data[(inning_data['PitchCall'] == 'FoulBall') | (inning_data['PitchCall'] == 'InPlay') | (inning_data['PitchCall'] == 'StrikeSwinging')]
+                whiffs = swings[swings['PitchCall'] == 'StrikeSwinging']
+                if len(swings) == 0:
+                    ws[f'O{20+j}'] = '-'
+                    ws[f'O{20+j}'].font = Font(bold=True, italic=True, size=20)
+                else:
+                    ws[f'O{20+j}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
+
+                ws[f'G{22+j}'] = inning.pitcherStatline(pitcher_id)
+
+                j += 15
+
+                if j == 75:
+                    j = 81
 
              #Create folders if they do not exist
             try:
@@ -708,3 +961,5 @@ class Game:
         for filename in os.listdir('temporary_figures'):
             file_path = os.path.join('temporary_figures//', filename)
             os.remove(file_path)
+
+        conn.close()

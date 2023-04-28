@@ -39,7 +39,15 @@ class AtBat():
     def catcher(self):
         return player.Catcher(list(self.data['CatcherId'])[0])
     
-    def getZoneTracer(self):
+    def zoneTracer(self, view = 'pitcher'):
+        
+        if view == 'pitcher':
+            mirror = 1
+        elif view == 'catcher':
+            mirror = -1
+        else:
+            raise Exception('View must be either "pitcher" or "catcher"')
+
         #Colors for pitch types
         pitch_colors = {'Fastball': '#FF0000', 'Four-Seam': '#FF0000', 'ChangeUp': '#00BFFF', 'Changeup': '#00BFFF', 'Slider': '#00FA9A',
                         'Cutter': '#7CFC00','Curveball': '#32CD32', 'Splitter': '#ADD8E6', 'Sinker': '#FF7F50', 'Knuckleball': '#48D1CC'}
@@ -66,7 +74,7 @@ class AtBat():
         c = []
         n = 1
         for pitch in self.pitches():
-            x.append(pitch.location_side)
+            x.append(mirror * pitch.location_side)
             y.append(pitch.location_height)
             l.append(n)
             #Try to use tagged_type, if not auto type, if not just leave it white
@@ -97,3 +105,6 @@ class AtBat():
         plt.close()
 
         return f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png'
+
+
+        

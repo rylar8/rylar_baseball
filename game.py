@@ -175,7 +175,8 @@ class Game:
                         'Cutter': '#7CFC00','Curveball': '#32CD32', 'Splitter': '#ADD8E6', 'Sinker': '#FF7F50', 'Knuckleball': '#48D1CC'}
 
         pitcher_data = self.data[self.data['PitcherId'] == pitcher_id]
-
+        
+        #Initialize plot
         fig, ax = plt.subplots(figsize = (2.5, 2.95))
         ax.set_xlim(-30,30)
         ax.set_ylim(-30,30)
@@ -193,10 +194,26 @@ class Game:
         ax.spines['bottom'].set_color('black')
         ax.tick_params(axis = 'both', which= 'both', bottom = False, left = False, labelleft = False, labelbottom = False)
 
+        #Create lists for plotting
         x = []
         y = []
-        n = []
         c = []
+
+        #Get pitches from tagged, if an error occurs use auto type
+        try:
+            pitches = set(pitcher_data['TaggedPitchType'].dropna())
+            for pitch in pitches:
+                pitch_data = pitcher_data[pitcher_data['TaggedPitchType'] == pitch]
+                x.append(mirror * pitch_data['HorzBreak'].mean())
+                y.append(pitch_data['InducedVertBreak'].mean())
+                c.append(pitch_colors[pitch])
+        except:
+            pitches = set(pitcher_data['AutoPitchType'].dropna())
+            for pitch in pitches:
+                pitch_data = pitcher_data[pitcher_data['TaggedPitchType'] == pitch]
+                x.append(mirror * pitch_data['HorzBreak'].mean())
+                y.append(pitch_data['InducedVertBreak'].mean())
+                c.append(pitch_colors[pitch])
         
         df = pd.DataFrame({'x': x,
                     'y': y,
@@ -207,18 +224,13 @@ class Game:
         for name, group in groups:
             plt.scatter(group.x, group.y, s = 100, zorder = 3, color = group.c, edgecolors= 'Black', linewidths = .45)
         
-        try:
-            os.mkdir(f'c:\\Users\\rlars\Desktop\Knights Baseball\Postgame Reports\\2022 Postgame Excel Sheets\{date[:3]}\{date}\Pitch Break Graphics')
-        except:
-            pass
-        newPath = f'c:\\Users\\rlars\Desktop\Knights Baseball\Postgame Reports\\2022 Postgame Excel Sheets\{date[:3]}\{date}\Pitch Break Graphics\{pitcher}.png'
-        
-        plt.savefig(newPath, bbox_inches='tight', transparent = True)
+        #Save figure in temporary holding spot so it can be anchored in excel sheet
+        plt.tight_layout()
+        plt.savefig(f'temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png', transparent = True)
         plt.close()
 
-        return Image(newPath)
+        return f'temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png'
         
-    
     def toDatabase(self):
         conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
@@ -822,6 +834,18 @@ class Game:
 
             ws[f'G{22}'] = self.pitcherStatline(pitcher_id)
 
+            #Get image from game method
+            img_path = self.movementPlot(pitcher_id)
+
+            #Resize the image to better fit excel sheet using PIL library
+            img = PILImage.open(img_path)
+            img_resized = img.resize((int(img.width*.83), int(img.height*.96)))
+            img_resized.save(img_path, 'PNG')
+            img.close()
+
+            #Add image to overall
+            ws.add_image(PYXLImage(img_path), f'C{10}')
+
             #Get a tuple of unique innings for pitcher and sort in order
             innings = sorted(set(self.data[self.data['PitcherId'] == pitcher_id][['Inning', 'Top/Bottom']].apply(lambda row : (row['Inning'], row['Top/Bottom']), axis=1)), key= lambda tup: (tup[0], tup[1]))
 
@@ -938,6 +962,18 @@ class Game:
                     ws[f'O{20+j}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
 
                 ws[f'G{22+j}'] = inning.pitcherStatline(pitcher_id)
+
+                #Get image from inning method
+                img_path = inning.movementPlot(pitcher_id)
+
+                #Resize the image to better fit excel sheet using PIL library
+                img = PILImage.open(img_path)
+                img_resized = img.resize((int(img.width*.83), int(img.height*.96)))
+                img_resized.save(img_path, 'PNG')
+                img.close()
+
+                #Add image to overall
+                ws.add_image(PYXLImage(img_path), f'C{10+j}')
 
                 j += 15
 

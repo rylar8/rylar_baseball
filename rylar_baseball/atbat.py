@@ -1,6 +1,4 @@
 import pandas as pd
-from pitch import Pitch
-import player
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Polygon
 
@@ -27,7 +25,7 @@ class AtBat():
     def pitches(self):
         pitches = []
         for i in range(len(set(self.data['PitchofPA']))):
-            pitches.append(Pitch(self.game_data, self.inning, self.number, i+1, self.top_bottom))
+            pitches.append(pitch.Pitch(self.game_data, self.inning, self.number, i+1, self.top_bottom))
         return pitches
     
     def batter(self):

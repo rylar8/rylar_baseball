@@ -1,5 +1,4 @@
 import pandas as pd
-from atbat import AtBat
 import matplotlib.pyplot as plt
 
 class Inning():
@@ -22,7 +21,7 @@ class Inning():
     def at_bats(self):
         at_bats = []
         for i in range(len(set(self.data['PAofInning']))):
-            at_bats.append(AtBat(self.game_data, self.number, i+1, self.top_bottom))
+            at_bats.append(atbat.AtBat(self.game_data, self.number, i+1, self.top_bottom))
         return at_bats
     
     def pitcherStatline(self, pitcher_id):

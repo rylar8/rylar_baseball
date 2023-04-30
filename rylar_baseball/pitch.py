@@ -1,4 +1,3 @@
-import pandas as pd
 
 class Pitch():
     def __init__(self, data, inning, at_bat, pitch, top_bottom = 'both'):

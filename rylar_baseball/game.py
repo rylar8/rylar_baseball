@@ -1,7 +1,3 @@
-from inning import Inning
-from team import Team
-from atbat import AtBat
-import player
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -26,8 +22,8 @@ class Game:
         self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
         self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
         self.time = self.data.iloc[0]['Time']
-        self.home = Team(self.data.iloc[0]['HomeTeam'])
-        self.away = Team(self.data.iloc[0]['AwayTeam'])
+        self.home = team.Team(self.data.iloc[0]['HomeTeam'])
+        self.away = team.Team(self.data.iloc[0]['AwayTeam'])
         if writeData:
             self.toDatabase()
 
@@ -40,8 +36,8 @@ class Game:
         self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
         self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
         self.time = self.data.iloc[0]['Time']
-        self.home = Team(self.data.iloc[0]['HomeTeam'])
-        self.away = Team(self.data.iloc[0]['AwayTeam'])
+        self.home = team.Team(self.data.iloc[0]['HomeTeam'])
+        self.away = team.Team(self.data.iloc[0]['AwayTeam'])
         if writeData:
             self.toDatabase()
 
@@ -132,14 +128,14 @@ class Game:
         self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
         self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
         self.time = self.data.iloc[0]['Time']
-        self.home = Team(self.data.iloc[0]['HomeTeam'])
-        self.away = Team(self.data.iloc[0]['AwayTeam'])
+        self.home = team.Team(self.data.iloc[0]['HomeTeam'])
+        self.away = team.Team(self.data.iloc[0]['AwayTeam'])
         conn.close()
 
     def innings(self, top_bottom):
         innings = []
         for i in range(len(set(self.data[self.data['Top/Bottom'] == top_bottom.capitalize()]['Inning']))):
-            innings.append(Inning(self.data, i+1, top_bottom))
+            innings.append(inning.Inning(self.data, i+1, top_bottom))
         return innings
     
     def batters(self):
@@ -394,7 +390,7 @@ class Game:
         pitches = []
         for pitch in self.data.itertuples():
             pitch_num = pitch.PitchNo
-            inning = pitch.Inning
+            inning_ = pitch.Inning
             #Get top bottom id
             cur.execute('SELECT split_id FROM inning_split WHERE split = ?', (pitch._16,))
             top_bottom_id = cur.fetchone()[0]
@@ -504,7 +500,7 @@ class Game:
             con_pos_z = pitch.ContactPositionZ
             hit_spin_axis = pitch.HitSpinAxis
 
-            pitches.append((game_id, pitch_num, inning, top_bottom_id, pa_of_inning, pitch_of_pa,
+            pitches.append((game_id, pitch_num, inning_, top_bottom_id, pa_of_inning, pitch_of_pa,
             pitcher_id, batter_id, catcher_id, league_id, division_id, home_id, away_id, outs, balls, strikes, velocity, 
             vertical, induced, horizontal, spin, axis, tilt, release_height, release_side, release_extension, auto_type_id,
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
@@ -564,10 +560,10 @@ class Game:
             i = 0
             for ab in at_bats:
                 #Initialize at_bat object
-                ws[f'J{i+10}'] = inning = ab[0]
+                ws[f'J{i+10}'] = inning_ = ab[0]
                 pa_of_inning = ab[1]
                 top_bottom = ab[2].lower()
-                at_bat = AtBat(self.data, inning, pa_of_inning, top_bottom)
+                at_bat = atbat.AtBat(self.data, inning_, pa_of_inning, top_bottom)
                 
                 ws[f'J{i+11}'] = at_bat.outs
                 ws[f'J{i+12}'] = 'Coming Soon' #Home
@@ -864,10 +860,10 @@ class Game:
                 #Initialize inning object
                 inn_num = inn[0]
                 top_bottom = inn[1].lower()
-                inning = Inning(self.data, inn_num, top_bottom)
+                inning_ = inning.Inning(self.data, inn_num, top_bottom)
 
                 #Get pitcher's inning data
-                inning_data = inning.data[inning.data['PitcherId'] == pitcher_id]
+                inning_data = inning_.data[inning_.data['PitcherId'] == pitcher_id]
                 
                 #Try using the tagged pitch type data, if an error occurs use the auto pitch type data
                 #(embedded try/except statement because two different trackman versions exist in league data)
@@ -970,10 +966,10 @@ class Game:
                 else:
                     ws[f'O{20+j}'] = f'{round(len(whiffs) / len(swings) * 100, 1)}%'
 
-                ws[f'G{22+j}'] = inning.pitcherStatline(pitcher_id)
+                ws[f'G{22+j}'] = inning_.pitcherStatline(pitcher_id)
 
                 #Get image from inning method
-                img_path = inning.movementPlot(pitcher_id)
+                img_path = inning_.movementPlot(pitcher_id)
 
                 #Resize the image to better fit excel sheet using PIL library
                 img = PILImage.open(img_path)

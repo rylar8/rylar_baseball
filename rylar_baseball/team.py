@@ -1,5 +1,4 @@
 import sqlite3
-from game import Game
 
 class Team():
     def __init__(self, trackman_id):
@@ -22,7 +21,7 @@ class Team():
                     JOIN teams ON games.away_id = teams.team_id''', (self.team_id, self.team_id))
 
         #Make a list of Game objects for all the games
-        games = [Game().loadID(tup[0]) for tup in cur.fetchall()]
+        games = [game.Game().loadID(tup[0]) for tup in cur.fetchall()]
 
         conn.close()
         return games

@@ -47,7 +47,9 @@ class Game:
         cur = conn.cursor()
 
         cur.execute('''SELECT trackman.*, 
-                    games.trackman_id AS trackman_game_id, 
+                    games.trackman_id AS trackman_game_id,
+                    games.date AS Date, 
+                    games.time AS Time,
                     batters.batter_name AS batter_name, batters.trackman_id AS batter_trackman_id, 
                     batter_side.side AS batter_side,
                     home_teams.team_name AS home_name, home_teams.trackman_name AS home_trackman_id,
@@ -104,13 +106,13 @@ class Game:
                 'Angle', 'Direction', 'HitSpinRate', 'hit_type_id', 'Distance', 'HangTime', 'Bearing', 'result_id',
                 'OutsOnPlay', 'RunsScored', 'ThrowSpeed', 'PopTime', 'k_or_bb_id', 'VertApprAngle', 'HorzApprAngle', 'ZoneSpeed', 'ZoneTime', 'PositionAt110X', 'PositionAt110Y',
                 'PositionAt110Z', 'LastTrackedDistance', 'pfxx', 'pfxz', 'x0', 'y0', 'z0', 'vx0', 'vy0', 'vz0', 'ax0', 'ay0', 'az0', 
-                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis', 'GameID', 'Batter', 'BatterId',
+                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis', 'GameID', 'Date', 'Time', 'Batter', 'BatterId',
                 'BatterSide', 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Top/Bottom', 'Pitcher', 
                 'PitcherId', 'PitcherThrows', 'Catcher', 'CatcherId', 'CatcherThrows', 'league_name', 
                 'Level', 'division_name', 'League', 'stadium_name', 'Stadium', 'AutoPitchType',
                 'TaggedPitchType', 'PitchCall', 'TaggedHitType', 'PlayResult', 'BatterTeam', 'PitcherTeam', 'CatcherTeam', 'KorBB']
         #Filter columns to get rid of database ids
-        filt = ['GameID', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
+        filt = ['GameID', 'Date', 'Time', 'PitchNo', 'Inning', 'Top/Bottom', 'PAofInning', 'PitchofPA', 'Pitcher',
                 'PitcherId', 'PitcherThrows', 'PitcherTeam', 'Batter', 'BatterId', 'BatterSide', 'BatterTeam', 'Catcher',
                 'CatcherId', 'CatcherThrows', 'CatcherTeam', 'league_name', 'Level', 'division_name', 'League',
                 'home_name', 'HomeTeam', 'away_name', 'AwayTeam', 'Outs', 'Balls', 'Strikes', 'RelSpeed', 'VertBreak',
@@ -119,7 +121,7 @@ class Game:
                 'HitSpinRate', 'TaggedHitType', 'Distance', 'HangTime', 'Bearing','PlayResult', 'KorBB', 'OutsOnPlay', 'RunsScored', 'ThrowSpeed',
                 'PopTime', 'VertApprAngle', 'HorzApprAngle', 'ZoneSpeed', 'ZoneTime', 'PositionAt110X', 'PositionAt110Y',
                 'PositionAt110Z', 'LastTrackedDistance', 'pfxx', 'pfxz', 'x0', 'y0', 'z0', 'vx0', 'vy0', 'vz0', 'ax0', 'ay0', 'az0', 
-                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis']
+                'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis', 'Stadium']
         
         self.data = pd.DataFrame(cur.fetchall(), columns=cols)[filt]
         self.stadium = self.data.iloc[0]['Stadium']

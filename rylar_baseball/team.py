@@ -22,7 +22,11 @@ class Team():
         WHERE home_team.team_id = ? OR away_team.team_id = ?''', (self.team_id, self.team_id))
 
         #Make a list of Game objects for all the games
-        games = [game.Game().loadID(tup[0]) for tup in cur.fetchall()]
+        games = []
+        for tup in cur.fetchall():
+            g = game.Game()
+            g.loadID(tup[0])
+            games.append(g)
 
         conn.close()
         return games

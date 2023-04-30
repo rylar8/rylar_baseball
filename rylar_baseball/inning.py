@@ -102,8 +102,8 @@ class Inning():
         
         #Save figure in temporary holding spot so it can be anchored in excel sheet
         plt.tight_layout()
-        plt.savefig(f'..//temporary_figures//{self.date}{self.game_id}{self.number}{pitcher_id}movement_plot.png', transparent = True)
+        plt.savefig(f'temporary_figures//{self.date}{self.game_id}{self.number}{pitcher_id}movement_plot.png', transparent = True)
         plt.close()
 
-        return f'..//temporary_figures//{self.date}{self.game_id}{self.number}{pitcher_id}movement_plot.png'
+        return f'temporary_figures//{self.date}{self.game_id}{self.number}{pitcher_id}movement_plot.png'
         

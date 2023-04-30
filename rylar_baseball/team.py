@@ -4,13 +4,13 @@ class Team():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id
 
-        conn = sqlite3.connect('..//rylar_baseball.db')
+        conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
         cur.execute('SELECT team_id FROM teams WHERE trackman_name = ?', (self.trackman_id,))
         self.team_id = cur.fetchone()[0]
 
     def games(self):
-        conn = sqlite3.connect('..//rylar_baseball.db')
+        conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
 
         #Get all trackman game IDs containing the team trackman name

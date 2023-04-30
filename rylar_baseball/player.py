@@ -3,7 +3,7 @@ import sqlite3
 class Player():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id
-        self.conn = sqlite3.connect('..//rylar_baseball.db')
+        self.conn = sqlite3.connect('rylar_baseball.db')
         self.cur = self.conn.cursor()
 
 class Pitcher(Player):

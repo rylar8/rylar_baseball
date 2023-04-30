@@ -3,9 +3,8 @@ import sqlite3
 class Player():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id
-        self.conn = sqlite3.connect('rylar_baseball.db')
+        self.conn = sqlite3.connect('..//rylar_baseball.db')
         self.cur = self.conn.cursor()
-    pass
 
 class Pitcher(Player):
     def __init__(self, trackman_id):
@@ -30,6 +29,7 @@ class Pitcher(Player):
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]
+        self.conn.close()
 
 class Batter(Player):
     def __init__(self, trackman_id):
@@ -54,6 +54,7 @@ class Batter(Player):
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]
+        self.conn.close()
 
 class Catcher(Player):
     def __init__(self, trackman_id):
@@ -78,7 +79,9 @@ class Catcher(Player):
         #Get player team trackman id from database
         self.cur.execute('SELECT trackman_name FROM teams WHERE team_id = ?', (self.team_id,))
         self.team_trackman_id = self.cur.fetchone()[0]
+        self.conn.close()
 
 class Baserunner(Batter):
     def __init__(self, trackman_id):
         super().__init__(trackman_id)
+        self.conn.close()

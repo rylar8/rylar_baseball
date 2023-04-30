@@ -101,10 +101,10 @@ class AtBat():
             plt.annotate(l[i], (x[i], y[i]), xytext = (x[i]-.055, y[i]-.056), fontsize = 12)
         #Save figure in temporary holding spot so it can be anchored in excel sheet
         plt.tight_layout()
-        plt.savefig(f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png', transparent = True)
+        plt.savefig(f'..//temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png', transparent = True)
         plt.close()
 
-        return f'temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png'
+        return f'..//temporary_figures//{self.date}{self.top_bottom}{self.inning}{self.number}zone_tracer.png'
 
 
         

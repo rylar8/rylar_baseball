@@ -46,7 +46,7 @@ class Game:
             self.toDatabase()
 
     def loadID(self, game_id):
-        conn = sqlite3.connect('rylar_baseball.db')
+        conn = sqlite3.connect('..//rylar_baseball.db')
         cur = conn.cursor()
 
         cur.execute('''SELECT trackman.*, 
@@ -125,6 +125,15 @@ class Game:
                 'ContactPositionX', 'ContactPositionY', 'ContactPositionZ', 'HitSpinAxis']
         
         self.data = pd.DataFrame(cur.fetchall(), columns=cols)[filt]
+        self.stadium = self.data.iloc[0]['Stadium']
+        self.league = self.data.iloc[0]['Level']
+        self.division = self.data.iloc[0]['League']
+        self.trackman_id = self.data.iloc[0]['GameID']
+        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
+        self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
+        self.time = self.data.iloc[0]['Time']
+        self.home = Team(self.data.iloc[0]['HomeTeam'])
+        self.away = Team(self.data.iloc[0]['AwayTeam'])
         conn.close()
 
     def innings(self, top_bottom):
@@ -226,13 +235,13 @@ class Game:
         
         #Save figure in temporary holding spot so it can be anchored in excel sheet
         plt.tight_layout()
-        plt.savefig(f'temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png', transparent = True)
+        plt.savefig(f'..//temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png', transparent = True)
         plt.close()
 
-        return f'temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png'
+        return f'..//temporary_figures//{self.date}{self.trackman_id}{pitcher_id}movement_plot.png'
         
     def toDatabase(self):
-        conn = sqlite3.connect('rylar_baseball.db')
+        conn = sqlite3.connect('..//rylar_baseball.db')
         cur = conn.cursor()
         #Add league
         try:
@@ -522,7 +531,7 @@ class Game:
         conn.close()
 
     def writeHitterReports(self, team_id):
-        temp_path = 'templates//postgame_hitter_template.xlsx'
+        temp_path = '..//templates//postgame_hitter_template.xlsx'
         #Get batters from data
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
 
@@ -679,27 +688,27 @@ class Game:
                     i = 50
             #Create folders if they do not exist
             try:
-                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}')
+                os.mkdir(f'..//postgame_hitter_reports//{batter.team_trackman_id}')
             except:
                 pass
             try:
-                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}')
+                os.mkdir(f'..//postgame_hitter_reports//{batter.team_trackman_id}//{self.date}')
             except:
                 pass
             #Save file to folder with player name
-            wb.save(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
+            wb.save(f'..//postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
             wb.close()
         
         #After writing all reports remove all of the temporary figures
-        for filename in os.listdir('temporary_figures'):
-            file_path = os.path.join('temporary_figures//', filename)
+        for filename in os.listdir('..//temporary_figures'):
+            file_path = os.path.join('..//temporary_figures//', filename)
             os.remove(file_path)
 
     def writePitcherReports(self, team_id):
-        conn = sqlite3.connect('rylar_baseball.db')
+        conn = sqlite3.connect('..//rylar_baseball.db')
         cur = conn.cursor()
 
-        temp_path = 'templates//postgame_pitcher_template.xlsx'
+        temp_path = '..//templates//postgame_pitcher_template.xlsx'
         #Get pitchers from data
         pitchers = set(self.data[self.data['PitcherTeam'] == team_id]['PitcherId'])
 
@@ -982,20 +991,20 @@ class Game:
 
              #Create folders if they do not exist
             try:
-                os.mkdir(f'postgame_pitcher_reports//{pitcher.team_trackman_id}')
+                os.mkdir(f'..//postgame_pitcher_reports//{pitcher.team_trackman_id}')
             except:
                 pass
             try:
-                os.mkdir(f'postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}')
+                os.mkdir(f'..//postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}')
             except:
                 pass
             #Save file to folder with player name
-            wb.save(f'postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}//{pitcher.name}.xlsx')
+            wb.save(f'..//postgame_pitcher_reports//{pitcher.team_trackman_id}//{self.date}//{pitcher.name}.xlsx')
             wb.close()
         
         #After writing all reports remove all of the temporary figures
-        for filename in os.listdir('temporary_figures'):
-            file_path = os.path.join('temporary_figures//', filename)
+        for filename in os.listdir('..//temporary_figures'):
+            file_path = os.path.join('..//temporary_figures//', filename)
             os.remove(file_path)
 
         conn.close()

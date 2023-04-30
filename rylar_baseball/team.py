@@ -1,4 +1,4 @@
-from . import game
+from . import game, player
 import sqlite3
 
 class Team():
@@ -17,8 +17,8 @@ class Team():
         #Get all trackman game IDs containing the team trackman name
         cur.execute('''SELECT games.trackman_id
         FROM games 
-        JOIN teams AS home_team ON games.home_id = home_team.team_id
-        JOIN teams AS away_team ON games.away_id = away_team.team_id 
+        LEFT JOIN teams AS home_team ON games.home_id = home_team.team_id
+        LEFT JOIN teams AS away_team ON games.away_id = away_team.team_id 
         WHERE home_team.team_id = ? OR away_team.team_id = ?''', (self.team_id, self.team_id))
 
         #Make a list of Game objects for all the games
@@ -31,14 +31,37 @@ class Team():
         conn.close()
         return games
 
-    def players(self):
-        pass
-
     def pitchers(self):
-        pass
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
 
-    def hitters(self):
-        pass
+        #Get all trackman game IDs containing the team trackman name
+        cur.execute('''SELECT pitchers.trackman_id
+        FROM pitchers 
+        LEFT JOIN teams ON pitchers.team_id = teams.team_id
+        WHERE pitchers.team_id = ?''', (self.team_id,))
+
+        #Make a list of Pitcher objects for all the games
+        pitchers = [player.Pitcher(tup[0]) for tup in cur.fetchall()]
+
+        conn.close()
+        return pitchers
+
+    def batters(self):
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+
+        #Get all trackman game IDs containing the team trackman name
+        cur.execute('''SELECT batters.trackman_id
+        FROM batters 
+        LEFT JOIN teams ON batters.team_id = teams.team_id
+        WHERE batters.team_id = ?''', (self.team_id,))
+
+        #Make a list of Batter objects for all the games
+        batters = [player.Batter(tup[0]) for tup in cur.fetchall()]
+
+        conn.close()
+        return batters
 
     def addGame(self, game):
         pass

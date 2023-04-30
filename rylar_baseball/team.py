@@ -1,3 +1,4 @@
+from . import game
 import sqlite3
 
 class Team():
@@ -15,10 +16,10 @@ class Team():
 
         #Get all trackman game IDs containing the team trackman name
         cur.execute('''SELECT games.trackman_id
-                    FROM games 
-                    WHERE games.home_id = ? OR WHERE games.away_id = ?
-                    JOIN teams ON games.home_id = teams.team_id
-                    JOIN teams ON games.away_id = teams.team_id''', (self.team_id, self.team_id))
+        FROM games 
+        JOIN teams AS home_team ON games.home_id = home_team.team_id
+        JOIN teams AS away_team ON games.away_id = away_team.team_id 
+        WHERE home_team.team_id = ? OR away_team.team_id = ?''', (self.team_id, self.team_id))
 
         #Make a list of Game objects for all the games
         games = [game.Game().loadID(tup[0]) for tup in cur.fetchall()]

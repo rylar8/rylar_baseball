@@ -529,8 +529,8 @@ class Game:
             print(f'Data already in trackman table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (game_id = {game_id}, trackman_id = {self.trackman_id})')
         conn.close()
 
-    def writeHitterReports(self, team_id):
-        temp_path = 'templates//postgame_hitter_template.xlsx'
+    def writeBatterReports(self, team_id):
+        temp_path = 'templates//postgame_batter_template.xlsx'
         #Get batters from data
         batters = set(self.data[self.data['BatterTeam'] == team_id]['BatterId'])
 
@@ -687,15 +687,15 @@ class Game:
                     i = 50
             #Create folders if they do not exist
             try:
-                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}')
+                os.mkdir(f'postgame_batter_reports//{batter.team_trackman_id}')
             except:
                 pass
             try:
-                os.mkdir(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}')
+                os.mkdir(f'postgame_batter_reports//{batter.team_trackman_id}//{self.date}')
             except:
                 pass
             #Save file to folder with player name
-            wb.save(f'postgame_hitter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
+            wb.save(f'postgame_batter_reports//{batter.team_trackman_id}//{self.date}//{batter.name}.xlsx')
             wb.close()
         
         #After writing all reports remove all of the temporary figures
@@ -1007,3 +1007,45 @@ class Game:
             os.remove(file_path)
 
         conn.close()
+
+    def updateStats(self):
+        #Hitters 
+        # Standard
+        # Statcast xBA, xSLG, xwOBA
+        # Advanced wRC, wRAA, wOBA
+        # Batted Ball
+        # Discipline 
+
+        #Do these on the dashboard side, should be a simple query (player / league)
+        # Advanced Plus BB%+, K%+, AVG+, OBP+, SLG+, wRC+, wOBA+, ISO+, BABIP+, xBA+, xSLG+, xwOBA+
+        # Batted Ball Plus LD%+, GB%+, FB%+, PULL%+, CENT%+, OPPO%+, PULLGB%+, CENTGB%+, OPPOGB%+, PULLOFFB%+, CENTOFFB%+, OPPOOFFB%+, SOFT%+, MED%+, HARD%+
+        # Statcast Plus EV+, maxEV+, Barrel%+, HH%+
+        # Discipline Plus O-Swing%+, Z-Swing%+, Swing%+, O-Contact%+, Z-Contact%+, Contact%+, Zone%+
+        
+        #Pitchers
+        # Standard
+        # Statcast xBA, xSLG, xwOBA
+        # Advanced K-BB%,FIP, SIERA
+        # Batted Ball 
+        # Discipline 
+
+        #Do these on the dashboard side, should be a simple query (player / league)
+        # Advanced Plus K/9+, BB/9+, K/BB+, HR/9+, K%+, BB%+, AVG+, WHIP+, BABIP+, ERA-, FIP-, xFIP-, LD%+, GB%+, FB%+, PULL%+, CENT%+, OPPO%+, PULLGB%+, CENTGB%+, OPPOGB%+, PULLOFFB%+, CENTOFFB%+, OPPOOFFB%+, SOFT%+, MED%+, HARD%+
+        # Statcast Plus EV+, maxEV+, Barrel%+, HH%+, xBA+, xSLG+, xwOBA+
+        # Discipline Plus O-Swing%+, Z-Swing%+, Swing%+, O-Contact%+, Z-Contact%+, Contact%+, Zone%+
+        
+        #Pitcher Arsenals
+        # Arsenal Standard H, HR, Strike%, Ball%, Usage%, TBF, H/TBF, HR/TBF
+        # Arsenal Info (New row for each pitch type) Velo, maxVelo, SpinRate, vert movement, induced vert, horz movement
+        # Arsenal Statcast (New row for each pitch type) EV, maxEV, LA, Barrels, Barrel%, HardHit, HH%, BABIP, xBABIP
+        # Arsenal Batted Ball (New row for each pitch type) GB/FB, LD%, GB%, FB%, IFFB%, HR/FB, RS, RS/9, Balls%, Strike%, PULL%, CENT%, OPPO%, PULLGB%, CENTGB%, OPPOGB%, PULLOFFB%, CENTOFFB%, OPPOOFFB%, SOFT%, MED%, HARD%
+        # Arsenal Discipline O-Swing%, Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%, Zone%
+
+        #Do these on the dashboard side, should be a simple query (player / league)
+        # Arsenal Standard Plus Strike%+, H/TBF+, HR/TBF+
+        # Arsenal Info Plus (compared to pitch type) velo+, maxVelo+, spinrate+, vert movement+, induced vert+, horz movement+
+        # Arsenal Statcast Plus EV+, maxEV+, Barrel%+, HH%+, BABIP+, xBABIP+,
+        # Arsenal Batted Ball Plus GB/FB, LD%, GB%, FB%, IFFB%, HR/FB, RS, RS/9, PULL%, CENT%, OPPO%, PULLGB%, CENTGB%, OPPOGB%, PULLOFFB%, CENTOFFB%, OPPOOFFB%, SOFT%, MED%, HARD%
+        # Arsenal Discipline Plus O-Swing%, Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%, Zone%
+
+        pass

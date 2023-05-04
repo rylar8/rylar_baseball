@@ -1035,11 +1035,11 @@ class Game:
         # Discipline Plus O-Swing%+, Z-Swing%+, Swing%+, O-Contact%+, Z-Contact%+, Contact%+, Zone%+
         
         #Pitcher Arsenals
-        # Arsenal Standard H, HR, Strike%, Ball%, Usage%, TBF, H/TBF, HR/TBF
-        # Arsenal Info (New row for each pitch type) Velo, maxVelo, SpinRate, vert movement, induced vert, horz movement
-        # Arsenal Statcast (New row for each pitch type) EV, maxEV, LA, Barrels, Barrel%, HardHit, HH%, BABIP, xBABIP
-        # Arsenal Batted Ball (New row for each pitch type) GB/FB, LD%, GB%, FB%, IFFB%, HR/FB, RS, RS/9, Balls%, Strike%, PULL%, CENT%, OPPO%, PULLGB%, CENTGB%, OPPOGB%, PULLOFFB%, CENTOFFB%, OPPOOFFB%, SOFT%, MED%, HARD%
-        # Arsenal Discipline O-Swing%, Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%, Zone%
+        # Arsenal Standard
+        # Arsenal Info 
+        # Arsenal Statcast xBABIP
+        # Arsenal Batted Ball
+        # Arsenal Discipline 
 
         #Do these on the dashboard side, should be a simple query (player / league)
         # Arsenal Standard Plus Strike%+, H/TBF+, HR/TBF+

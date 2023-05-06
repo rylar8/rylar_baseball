@@ -1142,7 +1142,7 @@ class Game:
         conn.commit()
 
         #Get every batted ball event by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 GROUP BY batter_id')
+        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
         bbeByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET bbe = ? WHERE batter_id = ?', ([(bbeByID.get(id, 0), id) for id in batterIDs]))
         conn.commit()
@@ -1289,6 +1289,46 @@ class Game:
         conn.commit()
 
         # Batted Ball
+
+        #Clear batted ball table
+        cur.execute('DELETE FROM batting_stats_batted_ball')
+        conn.commit()
+
+        #Insert every player id into the table
+        cur.executemany('INSERT INTO batting_stats_batted_ball (batter_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Insert every batted ball event by batter id
+        cur.executemany('UPDATE batting_stats_batted_ball SET bbe = ? WHERE batter_id = ?', ([(bbeByID.get(id, 0), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every ground ball rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        gb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET gb_rate = ? WHERE batter_id = ?', ([(gb_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every fly ball rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        fb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET fb_rate = ? WHERE batter_id = ?', ([(fb_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every line drive rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        ld_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET ld_rate = ? WHERE batter_id = ?', ([(ld_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every infield fly ball rate rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        iffb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET iffb_rate = ? WHERE batter_id = ?', ([(iffb_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
 
         # Discipline
 

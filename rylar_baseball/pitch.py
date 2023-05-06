@@ -74,3 +74,24 @@ class Pitch():
             self.con_pos_y = self.data['ContactPositionY'].iloc[0]
             self.con_pos_z = self.data['ContactPositionZ'].iloc[0]
             self.hit_spin_axis = self.data['HitSpinAxis'].iloc[0]
+
+
+    def barreled(self, exit_velocity, launch_angle):
+
+        barrel = False
+        if exit_velocity >= 98.0:
+            if exit_velocity <= 99.0:
+                if launch_angle >= 26.0 and launch_angle <= 30.0:
+                    barrel = True
+            elif exit_velocity <= 100.0:
+                if launch_angle >= 25.0 and launch_angle <= 31.0:
+                    barrel = True
+            #Not a perfect representation of a barrel, but pretty close
+            else:
+                range_growth = (exit_velocity - 100.0) * 1.2
+                high_angle = min(31.0 + range_growth, 50.0)
+                low_angle = max(25.0 - range_growth, 8.0)
+                if launch_angle >= low_angle and launch_angle <= high_angle:
+                    barrel = True
+
+        return barrel

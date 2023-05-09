@@ -1330,6 +1330,134 @@ class Game:
         cur.executemany('UPDATE batting_stats_batted_ball SET iffb_rate = ? WHERE batter_id = ?', ([(iffb_rateByID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
+        #Get every home run per fly ball rate by batter id
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        hr_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET hr_fb = ? WHERE batter_id = ?', ([(hr_fbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every pull rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        pull_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET pull_rate = ? WHERE batter_id = ?', ([(pull_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every center rate by batter id
+        cur.execute('''SELECT batter_id, COUNT(*),
+        COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
+        FROM trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL GROUP BY batter_id''')
+        tupsByID = cur.fetchall()
+        cent_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET cent_rate = ? WHERE batter_id = ?', ([(cent_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every oppo rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        oppo_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET oppo_rate = ? WHERE batter_id = ?', ([(oppo_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every pull per gb rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        pull_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET pull_gb_rate = ? WHERE batter_id = ?', ([(pull_gbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every center per gb rate by batter id
+        cur.execute('''SELECT batter_id, COUNT(*),
+        COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
+        FROM trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL GROUP BY batter_id''')
+        tupsByID = cur.fetchall()
+        cent_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET cent_gb_rate = ? WHERE batter_id = ?', ([(cent_gbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every oppo per gb rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        oppo_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET oppo_gb_rate = ? WHERE batter_id = ?', ([(oppo_gbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every pull per fb rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 25 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        pull_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET pull_fb_rate = ? WHERE batter_id = ?', ([(pull_fbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every center per fb rate by batter id
+        cur.execute('''SELECT batter_id, COUNT(*),
+        COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
+        FROM trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 25 AND launch_angle <=50 AND hit_bearing IS NOT NULL GROUP BY batter_id''')
+        tupsByID = cur.fetchall()
+        cent_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET cent_fb_rate = ? WHERE batter_id = ?', ([(cent_fbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get every oppo per fb rate by batter id
+        cur.execute('''SELECT trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM trackman
+        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 25 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL GROUP BY trackman.batter_id''')
+        tupsByID = cur.fetchall()
+        oppo_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET oppo_fb_rate = ? WHERE batter_id = ?', ([(oppo_fbByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get soft con rate by batter id ('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 GROUP BY batter_id')
+        cur.execute('SELECT batter_id, bbe, hh FROM batting_stats_statcast')
+        tupsByID = cur.fetchall()
+        hh_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_statcast SET hh_rate = ? WHERE batter_id = ?', ([(hh_rateByID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
         # Discipline
 
 

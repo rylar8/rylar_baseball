@@ -1451,11 +1451,25 @@ class Game:
         cur.executemany('UPDATE batting_stats_batted_ball SET oppo_fb_rate = ? WHERE batter_id = ?', ([(oppo_fbByID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
-        #Get soft con rate by batter id ('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 GROUP BY batter_id')
-        cur.execute('SELECT batter_id, bbe, hh FROM batting_stats_statcast')
+        #Get soft con rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
         tupsByID = cur.fetchall()
-        hh_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
-        cur.executemany('UPDATE batting_stats_statcast SET hh_rate = ? WHERE batter_id = ?', ([(hh_rateByID.get(id, None), id) for id in batterIDs]))
+        soft_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET soft_con_rate = ? WHERE batter_id = ?', ([(soft_conbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get med con rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        med_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET med_con_rate = ? WHERE batter_id = ?', ([(med_conbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get hard con rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        hard_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_batted_ball SET hard_con_rate = ? WHERE batter_id = ?', ([(hard_conbyID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
         # Discipline

@@ -56,6 +56,10 @@ class Batter(Player):
         self.team_trackman_id = self.cur.fetchone()[0]
         self.conn.close()
 
+    def probableStrikezone():
+        #Use ML to find estimate for player's strikezone height, would width change by hitter? probably not.
+        pass
+
 class Catcher(Player):
     def __init__(self, trackman_id):
         super().__init__(trackman_id)

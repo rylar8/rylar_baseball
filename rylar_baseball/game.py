@@ -289,11 +289,17 @@ class Game:
             cur.execute('UPDATE teams SET team_name = ? WHERE trackman_name = ?', (home_name, self.home.trackman_id))
             conn.commit()
         except:
-            pass
+            try:
+                #Update team division/league (when away team the league is not inputted)
+                cur.execute('UPDATE teams SET division_id = ? AND league_id = ? WHERE trackman_name = ? AND year = ?', (self.home.trackman_id, self.year))
+                conn.commit()
+            except:
+                pass
+          
         #Add away team
         try:
-            cur.execute('INSERT INTO teams (trackman_name, division_id, league_id, year) VALUES (?, ?, ?, ?)', 
-                    (self.away.trackman_id, division_id, league_id, self.year))
+            cur.execute('INSERT INTO teams (trackman_name, year) VALUES (?, ?)', 
+                    (self.away.trackman_id, self.year))
             conn.commit()
             #Get full team name
             away_name = input(f"Input new team name ({self.away.trackman_id}): ")
@@ -1474,6 +1480,67 @@ class Game:
 
         # Discipline
 
+        #Clear discipline table
+        cur.execute('DELETE FROM batting_stats_discipline')
+        conn.commit()
+
+        #Insert every player id into the table
+        cur.executemany('INSERT INTO batting_stats_discipline (batter_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Get outside of zone swing rate by batter id
+        #Get balls based on universal strike zone
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        o_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET o_swing = ? WHERE batter_id = ?', ([(o_swingbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get inside of zone swing rate by batter id
+        #Get strikes based on universal strike zone
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        z_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET z_swing = ? WHERE batter_id = ?', ([(z_swingbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get swing rate by batter id
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        swing_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET swing_rate = ? WHERE batter_id = ?', ([(swing_ratebyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get outside of zone contact rate by batter id
+        #Get balls based on universal strike zone
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        o_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET o_contact = ? WHERE batter_id = ?', ([(o_contactbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get inside of zone contact rate by batter id
+        #Get strikes based on universal strike zone
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        z_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET z_contact = ? WHERE batter_id = ?', ([(z_contactbyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get contact rate by batter id
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        contact_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET contact_rate = ? WHERE batter_id = ?', ([(contact_ratebyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
+
+        #Get inside of zone rate by batter id
+        #Get strikes based on universal strike zone
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM trackman GROUP BY batter_id')
+        tupsByID = cur.fetchall()
+        zone_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE batting_stats_discipline SET zone_rate = ? WHERE batter_id = ?', ([(zone_ratebyID.get(id, None), id) for id in batterIDs]))
+        conn.commit()
 
         #Do these on the dashboard side, should be a simple query (player / league)
         # Advanced Plus BB%+, K%+, AVG+, OBP+, SLG+, wRC+, wOBA+, ISO+, BABIP+, xBA+, xSLG+, xwOBA+
@@ -1482,6 +1549,53 @@ class Game:
         # Discipline Plus O-Swing%+, Z-Swing%+, Swing%+, O-Contact%+, Z-Contact%+, Contact%+, Zone%+
         
         #Pitchers
+
+        #Clear standard table
+        cur.execute('DELETE FROM pitching_stats_standard')
+        conn.commit()
+
+        #Get player_ids for filling null values and insert every id into the table
+        cur.execute('''SELECT DISTINCT trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year trackman
+                    FROM trackman
+                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    JOIN teams ON pitchers.team_id = teams.team_id''')
+        tupIDs = cur.fetchall()
+        cur.executemany('INSERT INTO pitching_stats_standard (pitcher_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        pitcherIDs = [tup[0] for tup in tupIDs]
+
+        #Get games by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT game_id) FROM trackman GROUP BY pitcher_id')
+        gByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET g = ? WHERE pitcher_id = ?', ([(gByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get games started by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE inning = 1 AND pa_of_inning = 1 AND pitch_of_pa = 1 GROUP BY pitcher_id')
+        gsByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET gs = ? WHERE pitcher_id = ?', ([(gsByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get complete games by pitcher id
+        cur.execute('SELECT pitcher_id FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1')
+        cgByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET cg = ? WHERE pitcher_id = ?', ([(cgByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get shutouts by pitcher id
+        cur.execute('SELECT pitcher_id FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1 AND SUM(runs_scored) = 0')
+        shoByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET sho = ? WHERE pitcher_id = ?', ([(shoByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get total batters faced by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman GROUP BY pitcher_id')
+        tbfByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET tbf = ? WHERE pitcher_id = ?', ([(tbfByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+
         # Standard
         # Statcast xBA, xSLG, xwOBA
         # Advanced K-BB%,FIP, SIERA

@@ -3,12 +3,7 @@ import sqlite3
 
 class Team():
     def __init__(self, trackman_id):
-        self.trackman_id = trackman_id
-
-        conn = sqlite3.connect('rylar_baseball.db')
-        cur = conn.cursor()
-        cur.execute('SELECT team_id FROM teams WHERE trackman_name = ?', (self.trackman_id,))
-        self.team_id = cur.fetchone()[0]
+        self.trackman_id = trackman_id 
 
     def games(self):
         conn = sqlite3.connect('rylar_baseball.db')
@@ -30,6 +25,9 @@ class Team():
 
         conn.close()
         return games
+
+    def toDatabase(self):
+        pass
 
     def pitchers(self):
         conn = sqlite3.connect('rylar_baseball.db')
@@ -63,7 +61,7 @@ class Team():
         conn.close()
         return batters
 
-    def addGame(self, game):
+    def addGame(self, Game):
         pass
 
     def addPlayer(self):

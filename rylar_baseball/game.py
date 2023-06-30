@@ -1589,10 +1589,28 @@ class Game:
         cur.executemany('UPDATE pitching_stats_standard SET sho = ? WHERE pitcher_id = ?', ([(shoByID.get(id, 0), id) for id in pitcherIDs]))
         conn.commit()
 
+        #Get innings pitched by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman WHERE (result_id = ? OR k_or_bb_id = ?) GROUP BY pitcher_id', (6,2))
+        ipByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET ip = ? WHERE pitcher_id = ?', ([((ipByID.get(id, 0) / 3), id) for id in pitcherIDs]))
+        conn.commit()
+
         #Get total batters faced by pitcher id
         cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman GROUP BY pitcher_id')
         tbfByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET tbf = ? WHERE pitcher_id = ?', ([(tbfByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get hits by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE result_id <= 4 GROUP BY pitcher_id')
+        hByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET h = ? WHERE pitcher_id = ?', ([(hByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get runs by pitcher id
+        cur.execute('SELECT pitcher_id, SUM(runs_scored) FROM trackman WHERE result_id <= 4 GROUP BY pitcher_id')
+        rByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET r = ? WHERE pitcher_id = ?', ([(rByID.get(id, 0), id) for id in pitcherIDs]))
         conn.commit()
 
 

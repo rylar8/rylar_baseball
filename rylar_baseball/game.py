@@ -1156,19 +1156,19 @@ class Game:
         #Get average exit velo by batter id
         cur.execute('SELECT batter_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
         avg_evByID = dict(cur.fetchall())
-        cur.executemany('UPDATE batting_stats_statcast SET avg_ev = ? WHERE batter_id = ?', ([(avg_evByID.get(id, 0), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_statcast SET avg_ev = ? WHERE batter_id = ?', ([(avg_evByID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
         #Get max exit velo by batter id
         cur.execute('SELECT batter_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
         max_evByID = dict(cur.fetchall())
-        cur.executemany('UPDATE batting_stats_statcast SET max_ev = ? WHERE batter_id = ?', ([(max_evByID.get(id, 0), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_statcast SET max_ev = ? WHERE batter_id = ?', ([(max_evByID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
         #Get average launch angle by batter id
         cur.execute('SELECT batter_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id')
         avg_laByID = dict(cur.fetchall())
-        cur.executemany('UPDATE batting_stats_statcast SET avg_la = ? WHERE batter_id = ?', ([(avg_laByID.get(id, 0), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_statcast SET avg_la = ? WHERE batter_id = ?', ([(avg_laByID.get(id, None), id) for id in batterIDs]))
         conn.commit()
 
         #Get barrels by batter id (probably need a league specific definition of barrel) 
@@ -1550,6 +1550,8 @@ class Game:
         
         #Pitchers
 
+        #Standard
+
         #Clear standard table
         cur.execute('DELETE FROM pitching_stats_standard')
         conn.commit()
@@ -1613,10 +1615,200 @@ class Game:
         cur.executemany('UPDATE pitching_stats_standard SET r = ? WHERE pitcher_id = ?', ([(rByID.get(id, 0), id) for id in pitcherIDs]))
         conn.commit()
 
+        #Get home runs by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE result_id = 4 GROUP BY pitcher_id')
+        hrByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET hr = ? WHERE pitcher_id = ?', ([(hrByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
 
-        # Standard
+        #Get walks by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 3 GROUP BY pitcher_id')
+        bbByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET bb = ? WHERE pitcher_id = ?', ([(bbByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get intentional walks by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 3 AND call_id = 9 GROUP BY pitcher_id')
+        ibbByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET ibb = ? WHERE pitcher_id = ?', ([(ibbByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get hit by pitch by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE call_id = 6 GROUP BY pitcher_id')
+        hbpByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET hbp = ? WHERE pitcher_id = ?', ([(hbpByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get strikeouts by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 2 GROUP BY pitcher_id')
+        soByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET so = ? WHERE pitcher_id = ?', ([(soByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get grounded into double plays by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE outs_made >= 2 AND hit_type_id = 4 GROUP BY pitcher_id')
+        gdpByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_standard SET gdp = ? WHERE pitcher_id = ?', ([(gdpByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
         # Statcast xBA, xSLG, xwOBA
+
+        #Clear statcast table
+        cur.execute('DELETE FROM pitching_stats_statcast')
+        conn.commit()
+
+        #Insert every player id into the table
+        cur.executemany('INSERT INTO pitching_stats_statcast (pitcher_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Get every batted ball event by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id')
+        bbeByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_statcast SET bbe = ? WHERE pitcher_id = ?', ([(bbeByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get average exit velo by pitcher id
+        cur.execute('SELECT pitcher_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id')
+        avg_evByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_statcast SET avg_ev = ? WHERE pitcher_id = ?', ([(avg_evByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get max exit velo by pitcher id
+        cur.execute('SELECT pitcher_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id')
+        max_evByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_statcast SET max_ev = ? WHERE pitcher_id = ?', ([(max_evByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get average launch angle by pitcher id
+        cur.execute('SELECT pitcher_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id')
+        avg_laByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_statcast SET avg_la = ? WHERE pitcher_id = ?', ([(avg_laByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get barrels by pitcher id (probably need a league specific definition of barrel) 
+        cur.execute('SELECT pitcher_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0')
+        tupsByID = cur.fetchall()
+
+        brlsByID = Counter()
+        for tup in tupsByID:
+            id = tup[0]
+            exit_velocity = float(tup[1])
+            launch_angle = float(tup[2])
+            barrel = False
+            if exit_velocity >= 98.0:
+                if exit_velocity <= 99.0:
+                    if launch_angle >= 26.0 and launch_angle <= 30.0:
+                        barrel = True
+                elif exit_velocity <= 100.0:
+                    if launch_angle >= 25.0 and launch_angle <= 31.0:
+                        barrel = True
+                #Not a perfect representation of a barrel, but pretty close
+                else:
+                    range_growth = (exit_velocity - 100.0) * 1.2
+                    high_angle = min(31.0 + range_growth, 50.0)
+                    low_angle = max(25.0 - range_growth, 8.0)
+                    if launch_angle >= low_angle and launch_angle <= high_angle:
+                        barrel = True
+            if barrel:
+                brlsByID[id] += 1
+        brlsByID = dict(brlsByID)
+        cur.executemany('UPDATE pitching_stats_statcast SET brls = ? WHERE pitcher_id = ?', ([(brlsByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get barrel rate by pitcher id
+        cur.execute('SELECT pitcher_id, bbe, brls FROM pitching_stats_statcast')
+        tupsByID = cur.fetchall()
+        brl_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_statcast SET brl_rate = ? WHERE pitcher_id = ?', ([(brl_rateByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get hard hits by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 GROUP BY pitcher_id')
+        hhByID = dict(cur.fetchall())
+        cur.executemany('UPDATE pitching_stats_statcast SET hh = ? WHERE pitcher_id = ?', ([(hhByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get hard hit rate by pitcher id
+        cur.execute('SELECT pitcher_id, bbe, hh FROM pitching_stats_statcast')
+        tupsByID = cur.fetchall()
+        hh_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_statcast SET hh_rate = ? WHERE pitcher_id = ?', ([(hh_rateByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
         # Advanced K-BB%,FIP, SIERA
+
+        #Clear statcast table
+        cur.execute('DELETE FROM pitching_stats_advanced')
+        conn.commit()
+
+        #Insert every player id into the table
+        cur.executemany('INSERT INTO pitching_stats_advanced (pitcher_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Get r/9 by pitcher id
+        cur.execute('SELECT pitcher_id, ip, r FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        r_9ByID = {tup[0] : (tup[2] / tup[1]) * 9 for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET r_9 = ? WHERE pitcher_id = ?', ([(r_9ByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get k/9 by pitcher id
+        cur.execute('SELECT pitcher_id, ip, so FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        k_9ByID = {tup[0] : (tup[2] / tup[1]) * 9 for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET k_9 = ? WHERE pitcher_id = ?', ([(k_9ByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get bb/9 by pitcher id
+        cur.execute('SELECT pitcher_id, ip, bb FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        bb_9ByID = {tup[0] : (tup[2] / tup[1]) * 9 for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET bb_9 = ? WHERE pitcher_id = ?', ([(bb_9ByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get k/bb by pitcher id
+        cur.execute('SELECT pitcher_id, so, bb FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        k_bbByID = {tup[0] : tup[1] / tup[2] for tup in tupsByID if tup[2]}
+        cur.executemany('UPDATE pitching_stats_advanced SET k_bb = ? WHERE pitcher_id = ?', ([(k_bbByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get hr/9 by pitcher id
+        cur.execute('SELECT pitcher_id, ip, hr FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        hr_9ByID = {tup[0] : (tup[2] / tup[1]) * 9 for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET hr_9 = ? WHERE pitcher_id = ?', ([(hr_9ByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get strikeout rate by pitcher id
+        cur.execute('SELECT pitcher_id, tbf, so FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        so_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET k_rate = ? WHERE pitcher_id = ?', ([(so_rateByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get walk rate by pitcher id
+        cur.execute('SELECT pitcher_id, tbf, bb FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        bb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET bb_rate = ? WHERE pitcher_id = ?', ([(bb_rateByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get whip by pitcher id
+        cur.execute('SELECT pitcher_id, ip, bb, h FROM pitching_stats_standard')
+        tupsByID = cur.fetchall()
+        whipByID = {tup[0] : (tup[2] + tup[3]) / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET whip = ? WHERE pitcher_id = ?', ([(whipByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+        #Get babip by pitcher id
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 GROUP BY pitcher_id')
+        tupsByID = cur.fetchall()
+        babipByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE pitching_stats_advanced SET babip = ? WHERE pitcher_id = ?', ([(babipByID.get(id, None), id) for id in pitcherIDs]))
+        conn.commit()
+
+
         # Batted Ball 
         # Discipline 
 

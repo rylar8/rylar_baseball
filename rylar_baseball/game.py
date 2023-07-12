@@ -10,6 +10,7 @@ from PIL import Image as PILImage
 import os
 import matplotlib.pyplot as plt
 from collections import Counter
+from IPython.display import clear_output
 
 class Game:
     def __init__(self):
@@ -2075,7 +2076,78 @@ class Game:
         # Discipline Plus O-Swing%+, Z-Swing%+, Swing%+, O-Contact%+, Z-Contact%+, Contact%+, Zone%+
         
         #Pitcher Arsenals
-        # Arsenal Standard
+
+        # Standard
+
+        #Clear standard table
+        cur.execute('DELETE FROM arsenal_stats_standard')
+        conn.commit()
+
+        #Get pitch ids from tagged pitch types for filling null values and insert every id into the table
+        cur.execute('''SELECT DISTINCT '1' || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, 
+                    trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year, trackman.tagged_type_id
+                    FROM trackman
+                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    JOIN teams ON pitchers.team_id = teams.team_id
+
+                    UNION
+
+                    SELECT DISTINCT '2' || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id,
+                    trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year, trackman.auto_type_id 
+                    FROM trackman
+                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    JOIN teams ON pitchers.team_id = teams.team_id''')
+        tupIDs = cur.fetchall()
+        cur.executemany('INSERT INTO arsenal_stats_standard (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id) VALUES (?,?,?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        arsenalIDs = [tup[0] for tup in tupIDs]
+
+        #Get hits by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE result_id <= 4 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE result_id <= 4 GROUP BY auto_pitch_id''')
+        hByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_standard SET h = ? WHERE pitch_id = ?', ([(hByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get home runs by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE result_id = 4 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE result_id = 4 GROUP BY auto_pitch_id''')
+        hrByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_standard SET hr = ? WHERE pitch_id = ?', ([(hrByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every strike rate by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman GROUP BY auto_pitch_id''')
+        tupsByID = cur.fetchall()
+        strike_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET strike_rate = ? WHERE pitch_id = ?', ([(strike_rateByID.get(id, None), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every ball rate by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman GROUP BY auto_pitch_id''')
+        tupsByID = cur.fetchall()
+        ball_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET ball_rate = ? WHERE pitch_id = ?', ([(ball_rateByID.get(id, None), id) for id in arsenalIDs]))
+        conn.commit() 
+
+        #Get every number of pitches by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman GROUP BY auto_pitch_id''')
+        npByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_standard SET np = ? WHERE pitch_id = ?', ([(npByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every usage rate by arsenal id
+        #cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman GROUP BY tagged_pitch_id
+        #UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman GROUP BY auto_pitch_id''')
+        #tupsByID = cur.fetchall()
+        #pitch_usageByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        #cur.executemany('UPDATE arsenal_stats_standard SET pitch_usage = ? WHERE pitch_id = ?', ([(pitch_usageByID.get(id, None), id) for id in arsenalIDs]))
+        #conn.commit()
+
         # Arsenal Info 
         # Arsenal Statcast xBABIP
         # Arsenal Batted Ball
@@ -2088,4 +2160,6 @@ class Game:
         # Arsenal Batted Ball Plus GB/FB, LD%, GB%, FB%, IFFB%, HR/FB, RS, RS/9, PULL%, CENT%, OPPO%, PULLGB%, CENTGB%, OPPOGB%, PULLOFFB%, CENTOFFB%, OPPOOFFB%, SOFT%, MED%, HARD%
         # Arsenal Discipline Plus O-Swing%, Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%, Zone%
 
+        clear_output(wait=True)
+        print('Done!')
         cur.close()

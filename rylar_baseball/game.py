@@ -2140,15 +2140,107 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_standard SET np = ? WHERE pitch_id = ?', ([(npByID.get(id, 0), id) for id in arsenalIDs]))
         conn.commit()
 
-        #Get every usage rate by arsenal id
-        #cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman GROUP BY tagged_pitch_id
-        #UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman GROUP BY auto_pitch_id''')
-        #tupsByID = cur.fetchall()
-        #pitch_usageByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
-        #cur.executemany('UPDATE arsenal_stats_standard SET pitch_usage = ? WHERE pitch_id = ?', ([(pitch_usageByID.get(id, None), id) for id in arsenalIDs]))
-        #conn.commit()
+        #Get every number of pitches by pitcher id
+        cur.execute('''SELECT pitcher_id, COUNT(*) FROM trackman GROUP BY pitcher_id''')
+        pitcher_npByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_standard SET pitcher_np = ? WHERE pitcher_id = ?', ([(pitcher_npByID.get(id, 0), id) for id in pitcherIDs]))
+        conn.commit()
 
-        # Arsenal Info 
+        #Get every usage rate by arsenal id
+        cur.execute('''SELECT pitch_id, pitcher_np, np FROM arsenal_stats_standard''')
+        tupsByID = cur.fetchall()
+        pitch_usageByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET pitch_usage = ? WHERE pitch_id = ?', ([(pitch_usageByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every hit per np rate by arsenal id
+        cur.execute('''SELECT pitch_id, np, h FROM arsenal_stats_standard''')
+        tupsByID = cur.fetchall()
+        h_npByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET h_np = ? WHERE pitch_id = ?', ([(h_npByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every home run per np rate by arsenal id
+        cur.execute('''SELECT pitch_id, np, hr FROM arsenal_stats_standard''')
+        tupsByID = cur.fetchall()
+        hr_npByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET hr_np = ? WHERE pitch_id = ?', ([(hr_npByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+        
+        #Get runs by arsenal id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, SUM(runs_scored) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, SUM(runs_scored) FROM trackman GROUP BY auto_pitch_id''')
+        rByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_standard SET r = ? WHERE pitch_id = ?', ([(rByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every run per np rate by arsenal id
+        cur.execute('''SELECT pitch_id, np, r FROM arsenal_stats_standard''')
+        tupsByID = cur.fetchall()
+        r_npByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_standard SET r_np = ? WHERE pitch_id = ?', ([(r_npByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        # Arsenal Info
+
+        #Clear info table
+        cur.execute('DELETE FROM arsenal_stats_info')
+        conn.commit()
+        
+        #Insert every pitch into the info table
+        cur.executemany('INSERT INTO arsenal_stats_info (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id) VALUES (?,?,?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Get avg velo by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(velocity) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(velocity) FROM trackman GROUP BY auto_pitch_id''')
+        avg_veloByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET avg_velo = ? WHERE pitch_id = ?', ([(avg_veloByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get max velo by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(velocity) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(velocity) FROM trackman GROUP BY auto_pitch_id''')
+        max_veloByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET max_velo = ? WHERE pitch_id = ?', ([(max_veloByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get avg spin by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(spin) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(spin) FROM trackman GROUP BY auto_pitch_id''')
+        avg_spin_rateByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET avg_spin_rate = ? WHERE pitch_id = ?', ([(avg_spin_rateByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get max spin by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(spin) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(spin) FROM trackman GROUP BY auto_pitch_id''')
+        max_spin_rateByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET max_spin_rate = ? WHERE pitch_id = ?', ([(max_spin_rateByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get avg vert movement by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(vertical) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(vertical) FROM trackman GROUP BY auto_pitch_id''')
+        avg_vert_movementByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET avg_vert_movement = ? WHERE pitch_id = ?', ([(avg_vert_movementByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get avg induced movement by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(induced) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(induced) FROM trackman GROUP BY auto_pitch_id''')
+        avg_induced_movementByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET avg_induced_movement = ? WHERE pitch_id = ?', ([(avg_induced_movementByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get avg horz movement by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(horizontal) FROM trackman GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(horizontal) FROM trackman GROUP BY auto_pitch_id''')
+        avg_horz_movementByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_info SET avg_horz_movement = ? WHERE pitch_id = ?', ([(avg_horz_movementByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+
         # Arsenal Statcast xBABIP
         # Arsenal Batted Ball
         # Arsenal Discipline 

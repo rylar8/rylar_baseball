@@ -2330,7 +2330,7 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_statcast SET hh_rate = ? WHERE pitch_id = ?', ([(hh_rateByID.get(id, None), id) for id in arsenalIDs]))
         conn.commit()
 
-        #Get babip by batter id
+        #Get babip by pitch id
         cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 GROUP BY tagged_pitch_id
         UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 GROUP BY auto_pitch_id''')
         tupsByID = cur.fetchall()
@@ -2339,6 +2339,19 @@ class Game:
         conn.commit()
 
         # Arsenal Batted Ball
+
+        #Clear info table
+        cur.execute('DELETE FROM arsenal_stats_batted_ball')
+        conn.commit()
+        
+        #Insert every pitch into the batted ball table
+        cur.executemany('INSERT INTO arsenal_stats_batted_ball (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id) VALUES (?,?,?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Insert every batted ball event by pitch id
+        cur.executemany('UPDATE arsenal_stats_batted_ball SET bbe = ? WHERE  pitch_id = ?', ([(bbeByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
         # Arsenal Discipline 
 
         #Do these on the dashboard side, should be a simple query (player / league)

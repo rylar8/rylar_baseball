@@ -2240,8 +2240,104 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_info SET avg_horz_movement = ? WHERE pitch_id = ?', ([(avg_horz_movementByID.get(id, 0), id) for id in arsenalIDs]))
         conn.commit()
 
-
         # Arsenal Statcast xBABIP
+
+        #Clear statcast table
+        cur.execute('DELETE FROM arsenal_stats_statcast')
+        conn.commit()
+        
+        #Insert every pitch into the info table
+        cur.executemany('INSERT INTO arsenal_stats_statcast (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id) VALUES (?,?,?,?,?,?,?)', (tupIDs))
+        conn.commit()
+
+        #Get avg exit velo by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY auto_pitch_id''')
+        avg_evByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_statcast SET avg_ev = ? WHERE pitch_id = ?', ([(avg_evByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get max exit velo by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY auto_pitch_id''')
+        max_evByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_statcast SET max_ev = ? WHERE pitch_id = ?', ([(max_evByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get avg launch angle by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY auto_pitch_id''')
+        avg_laByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_statcast SET avg_la = ? WHERE pitch_id = ?', ([(avg_laByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get every batted ball event by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY auto_pitch_id''')
+        bbeByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_statcast SET bbe = ? WHERE pitch_id = ?', ([(bbeByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get barrels by pitch id (probably need a league specific definition of barrel) 
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0''')
+        tupsByID = cur.fetchall()
+
+        brlsByID = Counter()
+        for tup in tupsByID:
+            id = tup[0]
+            exit_velocity = float(tup[1])
+            launch_angle = float(tup[2])
+            barrel = False
+            if exit_velocity >= 98.0:
+                if exit_velocity <= 99.0:
+                    if launch_angle >= 26.0 and launch_angle <= 30.0:
+                        barrel = True
+                elif exit_velocity <= 100.0:
+                    if launch_angle >= 25.0 and launch_angle <= 31.0:
+                        barrel = True
+                #Not a perfect representation of a barrel, but pretty close
+                else:
+                    range_growth = (exit_velocity - 100.0) * 1.2
+                    high_angle = min(31.0 + range_growth, 50.0)
+                    low_angle = max(25.0 - range_growth, 8.0)
+                    if launch_angle >= low_angle and launch_angle <= high_angle:
+                        barrel = True
+            if barrel:
+                brlsByID[id] += 1
+        brlsByID = dict(brlsByID)
+        cur.executemany('UPDATE arsenal_stats_statcast SET brls = ? WHERE pitch_id = ?', ([(brlsByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get barrel rate by pitch id
+        cur.execute('SELECT pitch_id, bbe, brls FROM arsenal_stats_statcast')
+        tupsByID = cur.fetchall()
+        brl_rateByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_statcast SET brl_rate = ? WHERE pitch_id = ?', ([(brl_rateByID.get(id, None), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get hard hits by pitch id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 GROUP BY auto_pitch_id''')
+        hhByID = dict(cur.fetchall())
+        cur.executemany('UPDATE arsenal_stats_statcast SET hh = ? WHERE pitch_id = ?', ([(hhByID.get(id, 0), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get hard hit rate by pitch id
+        cur.execute('SELECT pitch_id, bbe, hh FROM arsenal_stats_statcast')
+        tupsByID = cur.fetchall()
+        hh_rateByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_statcast SET hh_rate = ? WHERE pitch_id = ?', ([(hh_rateByID.get(id, None), id) for id in arsenalIDs]))
+        conn.commit()
+
+        #Get babip by batter id
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 GROUP BY auto_pitch_id''')
+        tupsByID = cur.fetchall()
+        babipByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
+        cur.executemany('UPDATE arsenal_stats_statcast SET babip = ? WHERE pitch_id = ?', ([(babipByID.get(id, None), id) for id in arsenalIDs]))
+        conn.commit()
+
         # Arsenal Batted Ball
         # Arsenal Discipline 
 

@@ -1045,10 +1045,11 @@ class Game:
         conn.commit()
 
         #Get player_ids for filling null values and insert every id into the table
-        cur.execute('''SELECT DISTINCT trackman.batter_id, trackman.league_id, trackman.division_id, batters.team_id, teams.year trackman
+        cur.execute('''SELECT trackman.batter_id, trackman.league_id, trackman.division_id, batters.team_id, teams.year trackman
                     FROM trackman
-                    JOIN batters ON trackman.batter_id = batters.batter_id
-                    JOIN teams ON batters.team_id = teams.team_id''')
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    LEFT JOIN teams ON batters.team_id = teams.team_id
+                    GROUP BY trackman.batter_id, teams.year''')
         tupIDs = cur.fetchall()
         cur.executemany('INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
         conn.commit()
@@ -1247,21 +1248,21 @@ class Game:
         cur.execute('SELECT batter_id, ab, h FROM batting_stats_standard')
         tupsByID = cur.fetchall()
         avgByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
-        cur.executemany('UPDATE batting_stats_advanced SET avg = ? WHERE batter_id = ?', ([(avgByID.get(id, None), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_advanced SET avg = ? WHERE batter_id = ?', ([(avgByID.get(id, 0), id) for id in batterIDs]))
         conn.commit()
 
         #Get obp by batter id
         cur.execute('SELECT batter_id, pa, h, bb, hbp FROM batting_stats_standard')
         tupsByID = cur.fetchall()
         obpByID = {tup[0] : (tup[2] + tup[3] + tup[4]) / tup[1] for tup in tupsByID if tup[1]}
-        cur.executemany('UPDATE batting_stats_advanced SET obp = ? WHERE batter_id = ?', ([(obpByID.get(id, None), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_advanced SET obp = ? WHERE batter_id = ?', ([(obpByID.get(id, 0), id) for id in batterIDs]))
         conn.commit()
 
         #Get slg by batter id
         cur.execute('SELECT batter_id, ab, tb FROM batting_stats_standard')
         tupsByID = cur.fetchall()
         slgByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
-        cur.executemany('UPDATE batting_stats_advanced SET slg = ? WHERE batter_id = ?', ([(slgByID.get(id, None), id) for id in batterIDs]))
+        cur.executemany('UPDATE batting_stats_advanced SET slg = ? WHERE batter_id = ?', ([(slgByID.get(id, 0), id) for id in batterIDs]))
         conn.commit()
 
         #Get ops by batter id
@@ -1569,10 +1570,11 @@ class Game:
         conn.commit()
 
         #Get player_ids for filling null values and insert every id into the table
-        cur.execute('''SELECT DISTINCT trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year trackman
+        cur.execute('''SELECT trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year trackman
                     FROM trackman
                     JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-                    JOIN teams ON pitchers.team_id = teams.team_id''')
+                    JOIN teams ON pitchers.team_id = teams.team_id
+                    GROUP BY trackman.pitcher_id, teams.year''')
         tupIDs = cur.fetchall()
         cur.executemany('INSERT INTO pitching_stats_standard (pitcher_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))
         conn.commit()
@@ -1592,13 +1594,13 @@ class Game:
         conn.commit()
 
         #Get complete games by pitcher id
-        cur.execute('SELECT pitcher_id FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1')
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1')
         cgByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET cg = ? WHERE pitcher_id = ?', ([(cgByID.get(id, 0), id) for id in pitcherIDs]))
         conn.commit()
 
         #Get shutouts by pitcher id
-        cur.execute('SELECT pitcher_id FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1 AND SUM(runs_scored) = 0')
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1 AND SUM(runs_scored) = 0')
         shoByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET sho = ? WHERE pitcher_id = ?', ([(shoByID.get(id, 0), id) for id in pitcherIDs]))
         conn.commit()
@@ -2100,6 +2102,7 @@ class Game:
                     FROM trackman
                     JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
                     JOIN teams ON pitchers.team_id = teams.team_id
+                    GROUP BY tagged_pitch_id
 
                     UNION
 
@@ -2107,7 +2110,8 @@ class Game:
                     trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year, trackman.auto_type_id 
                     FROM trackman
                     JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-                    JOIN teams ON pitchers.team_id = teams.team_id''')
+                    JOIN teams ON pitchers.team_id = teams.team_id
+                    GROUP BY auto_pitch_id''')
         tupIDs = cur.fetchall()
         cur.executemany('INSERT INTO arsenal_stats_standard (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id) VALUES (?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()

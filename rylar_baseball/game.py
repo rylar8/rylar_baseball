@@ -16,20 +16,19 @@ class Game:
     def __init__(self):
         pass
 
-    def loadCSV(self, csv, writeData = True):
+    def loadCSV(self, csv, writeData = True, updateStats = True):
         self.data = pd.read_csv(csv)
         self.stadium = self.data.iloc[0]['Stadium']
         self.league = self.data.iloc[0]['Level']
         self.division = self.data.iloc[0]['League']
         self.trackman_id = self.data.iloc[0]['GameID']
-        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
-        self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
+        self.date = pd.to_datetime(self.data.iloc[0]['UTCDateTime']).date()
+        self.year = pd.to_datetime(self.data.iloc[0]['UTCDateTime']).year
         self.time = self.data.iloc[0]['Time']
         self.home = team.Team(self.data.iloc[0]['HomeTeam'])
         self.away = team.Team(self.data.iloc[0]['AwayTeam'])
         if writeData:
             self.toDatabase()
-            self.updateStats()
 
     def loadDF(self, data, writeData = True):
         self.data = data
@@ -466,7 +465,10 @@ class Game:
                 tagged_type_id = 9
             #Get call id
             cur.execute('SELECT type_id FROM calls WHERE call = ?', (pitch.PitchCall,))
-            call_id = cur.fetchone()[0]
+            try:
+                call_id = cur.fetchone()[0]
+            except:
+                print(f'Unknown pitch call found in csv: "{pitch.PitchCall}" Pitch No. {pitch.number}\nPlease check database.')
             location_height = pitch.PlateLocHeight
             location_side = pitch.PlateLocSide
             exit_velocity = pitch.ExitSpeed
@@ -475,20 +477,29 @@ class Game:
             hit_spin = pitch.HitSpinRate
             #Get hit type id
             cur.execute('SELECT type_id FROM hits WHERE hit = ?', (pitch.TaggedHitType,))
-            hit_type_id = cur.fetchone()[0]
+            try:
+                hit_type_id = cur.fetchone()[0]
+            except:
+                print(f'Unknown hit type found in csv: "{pitch.TaggedHitType}" Pitch No. {pitch.number}\nPlease check database.')
             distance = pitch.Distance
             hang_time = pitch.HangTime
             hit_bearing = pitch.Bearing
             #Get result id
             cur.execute('SELECT type_id FROM results WHERE result = ?', (pitch.PlayResult,))
-            result_id = cur.fetchone()[0]
+            try:
+                result_id = cur.fetchone()[0]
+            except:
+                print(f'Unknown play result found in csv: "{pitch.PlayResult}" Pitch No. {pitch.number}\nPlease check database.')
             outs_made = pitch.OutsOnPlay
             runs_scored = pitch.RunsScored
             catcher_velocity = pitch.ThrowSpeed
             catcher_pop = pitch.PopTime
             #Get k_or_bb id
             cur.execute('SELECT k_or_bb_id FROM k_or_bb WHERE k_or_bb = ?', (pitch.KorBB,))
-            k_or_bb_id = cur.fetchone()[0]
+            try:
+                k_or_bb_id = cur.fetchone()[0]
+            except:
+                print(f'Unknown K or BB value found in csv: "{pitch.KorBB}" Pitch No. {pitch.number}\nPlease check database.')
             vert_approach_angle = pitch.VertApprAngle
             horz_approach_angle = pitch.HorzApprAngle
             zone_speed = pitch.ZoneSpeed

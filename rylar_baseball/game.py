@@ -1194,7 +1194,7 @@ class Game:
         conn.commit()
 
         #Get barrels by batter id (probably need a league specific definition of barrel) 
-        cur.execute('SELECT batter_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0 WHERE (upload_timestamp + 43200) > ? ', (self.timestamp,))
+        cur.execute('SELECT batter_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? ', (self.timestamp,))
         tupsByID = cur.fetchall()
 
         brlsByID = Counter()
@@ -1331,7 +1331,7 @@ class Game:
         conn.commit()
 
         #Get every ground ball rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         gb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET gb_rate = ? WHERE batter_id = ?', ([(gb_rateByID.get(id, None), id) for id in batterIDs]))
@@ -1914,7 +1914,7 @@ class Game:
         cur.execute('''SELECT pitcher_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
         FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL GROUP BY pitcher_id''', (self.timestamp,))
+        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET cent_rate = ? WHERE pitcher_id = ?', ([(cent_rateByID.get(id, None), id) for id in pitcherIDs]))
@@ -2121,16 +2121,16 @@ class Game:
                     JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
                     JOIN teams ON pitchers.team_id = teams.team_id
                     WHERE (trackman.upload_timestamp + 43200) > ?
-                    GROUP BY auto_pitch_id''')
+                    GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupIDs = [tup + (self.timestamp,) for tup in cur.fetchall()]
         arsenalIDs = [tup[0] for tup in tupIDs]
 
         #Clear standard table of recent players if they are already listed
-        cur.executemany('DELETE FROM arsenal_stats_standard WHERE pitcher_id = ?', [(id,) for id in arsenalIDs])
+        cur.executemany('DELETE FROM arsenal_stats_standard WHERE pitch_id = ?', [(id,) for id in arsenalIDs])
         conn.commit()
         
         #Insert every pitch id into the table that played in recently uploaded games
-        cur.executemany('INSERT INTO arsenal_stats_standard (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
+        cur.executemany('INSERT INTO arsenal_stats_standard (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()
 
         #Get hits by arsenal id
@@ -2214,11 +2214,11 @@ class Game:
         # Arsenal Info
 
         #Clear info table of recent players if they are already listed
-        cur.executemany('DELETE FROM arsenal_stats_info WHERE pitcher_id = ?', [(id,) for id in arsenalIDs])
+        cur.executemany('DELETE FROM arsenal_stats_info WHERE pitch_id = ?', [(id,) for id in arsenalIDs])
         conn.commit()
         
         #Insert every pitch id into the table that played in recently uploaded games
-        cur.executemany('INSERT INTO arsenal_stats_info (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
+        cur.executemany('INSERT INTO arsenal_stats_info (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()
 
         #Get avg velo by pitch id
@@ -2273,11 +2273,11 @@ class Game:
         # Arsenal Statcast xBABIP
 
         #Clear statcast table of recent players if they are already listed
-        cur.executemany('DELETE FROM arsenal_stats_statcast WHERE pitcher_id = ?', [(id,) for id in arsenalIDs])
+        cur.executemany('DELETE FROM arsenal_stats_statcast WHERE pitch_id = ?', [(id,) for id in arsenalIDs])
         conn.commit()
         
         #Insert every pitch id into the table that played in recently uploaded games
-        cur.executemany('INSERT INTO arsenal_stats_statcast (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
+        cur.executemany('INSERT INTO arsenal_stats_statcast (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()
 
         #Get avg exit velo by pitch id
@@ -2354,7 +2354,7 @@ class Game:
         conn.commit()
 
         #Get hard hit rate by pitch id
-        cur.execute('SELECT pitch_id, bbe, hh FROM arsenal_stats_statcast', (self.timestamp,))
+        cur.execute('SELECT pitch_id, bbe, hh FROM arsenal_stats_statcast WHERE (last_updated + 43200) > ?', (self.timestamp,))
         tupsByID = cur.fetchall()
         hh_rateByID = {str(tup[0]) : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_statcast SET hh_rate = ? WHERE pitch_id = ?', ([(hh_rateByID.get(id, None), id) for id in arsenalIDs]))
@@ -2371,11 +2371,11 @@ class Game:
         # Arsenal Batted Ball
 
         #Clear batted ball table of recent players if they are already listed
-        cur.executemany('DELETE FROM arsenal_stats_batted_ball WHERE pitcher_id = ?', [(id,) for id in arsenalIDs])
+        cur.executemany('DELETE FROM arsenal_stats_batted_ball WHERE pitch_id = ?', [(id,) for id in arsenalIDs])
         conn.commit()
         
         #Insert every pitch id into the table that played in recently uploaded games
-        cur.executemany('INSERT INTO arsenal_stats_batted_ball (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
+        cur.executemany('INSERT INTO arsenal_stats_batted_ball (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()
 
         #Insert every batted ball event by pitch id
@@ -2639,11 +2639,11 @@ class Game:
         # Discipline 
 
         #Clear discipline table of recent players if they are already listed
-        cur.executemany('DELETE FROM arsenal_stats_discipline WHERE pitcher_id = ?', [(id,) for id in arsenalIDs])
+        cur.executemany('DELETE FROM arsenal_stats_discipline WHERE pitch_id = ?', [(id,) for id in arsenalIDs])
         conn.commit()
         
         #Insert every pitch id into the table that played in recently uploaded games
-        cur.executemany('INSERT INTO arsenal_stats_discipline (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
+        cur.executemany('INSERT INTO arsenal_stats_discipline (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
         conn.commit()
 
         #Get outside of zone swing rate by pitch id

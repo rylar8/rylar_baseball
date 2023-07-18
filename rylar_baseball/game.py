@@ -11,12 +11,16 @@ import os
 import matplotlib.pyplot as plt
 from collections import Counter
 from IPython.display import clear_output
+import datetime
+
+#Add a version or timestamp to the statistics. Check if there are trackman uploads connected to their ID with a newer timestamp.
+#Only update those stats. 
 
 class Game:
     def __init__(self):
         pass
 
-    def loadCSV(self, csv, writeData = True, updateStats = True):
+    def loadCSV(self, csv, writeData = True):
         self.data = pd.read_csv(csv)
         self.stadium = self.data.iloc[0]['Stadium']
         self.league = self.data.iloc[0]['Level']
@@ -27,8 +31,10 @@ class Game:
         self.time = self.data.iloc[0]['Time']
         self.home = team.Team(self.data.iloc[0]['HomeTeam'])
         self.away = team.Team(self.data.iloc[0]['AwayTeam'])
+        self.timestamp = pd.to_datetime(datetime.datetime.now())
         if writeData:
             self.toDatabase()
+            self.updateStats()
 
     def loadDF(self, data, writeData = True):
         self.data = data
@@ -36,11 +42,12 @@ class Game:
         self.league = self.data.iloc[0]['Level']
         self.division = self.data.iloc[0]['League']
         self.trackman_id = self.data.iloc[0]['GameID']
-        self.date = pd.to_datetime(self.data.iloc[0]['Date']).date()
-        self.year = pd.to_datetime(self.data.iloc[0]['Date']).year
+        self.date = pd.to_datetime(self.data.iloc[0]['UTCDateTime']).date()
+        self.year = pd.to_datetime(self.data.iloc[0]['UTCDateTime']).year
         self.time = self.data.iloc[0]['Time']
         self.home = team.Team(self.data.iloc[0]['HomeTeam'])
         self.away = team.Team(self.data.iloc[0]['AwayTeam'])
+        self.timestamp = pd.to_datetime(datetime.datetime.now())
         if writeData:
             self.toDatabase()
             self.updateStats()
@@ -328,8 +335,8 @@ class Game:
         away_id = cur.fetchone()[0]
         try:
             #Add game
-            cur.execute('''INSERT INTO games (trackman_id, date, time, stadium_id, league_id, division_id, home_id, away_id)
-            VALUES (?,?,?,?,?,?,?,?)''', (self.trackman_id, str(self.date), self.time, stadium_id, league_id, division_id, home_id, away_id))
+            cur.execute('''INSERT INTO games (trackman_id, date, time, stadium_id, league_id, division_id, home_id, away_id, upload_timestamp)
+            VALUES (?,?,?,?,?,?,?,?,?)''', (self.trackman_id, str(self.date), self.time, stadium_id, league_id, division_id, home_id, away_id, str(self.timestamp)))
             conn.commit()
         except:
             print(f'Game already in games table: {self.away.trackman_id} at {self.home.trackman_id} on {self.date} (trackman_id = {self.trackman_id})')
@@ -1044,11 +1051,12 @@ class Game:
         cur.execute('DELETE FROM batting_stats_standard')
         conn.commit()
 
-        #Get player_ids for filling null values and insert every id into the table
+        #Get batter_ids for filling null values and insert every id into the table
         cur.execute('''SELECT trackman.batter_id, trackman.league_id, trackman.division_id, batters.team_id, teams.year trackman
                     FROM trackman
                     LEFT JOIN batters ON trackman.batter_id = batters.batter_id
                     LEFT JOIN teams ON batters.team_id = teams.team_id
+                    LEFT JOIN games ON trackman.game_id = games.game_id
                     GROUP BY trackman.batter_id, teams.year''')
         tupIDs = cur.fetchall()
         cur.executemany('INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year) VALUES (?,?,?,?,?)', (tupIDs))

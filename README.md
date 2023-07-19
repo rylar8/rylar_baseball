@@ -101,6 +101,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
   - `data` must be a data frame containing a full Trackman game
   - `inning` must be an integer indicating an inning within the game
   - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
+
   - Initialized within the `Inning` object are:
     - `.game_data` (full game data from which this `Inning` is derived)
     - `.top_bottom` (a string containing 'top' or 'bottom' indicating the half of the inning)
@@ -131,6 +132,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
   - `inning` must be an integer indicating an inning within the game
   - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
   - `at_bat` must be an integer indicating a plate appearance within the half inning
+  
   - Initialized within the `AtBat` object are:
     - `.inning` (inning number of the game)
     - `.game_data` (full game data from which this `AtBat` is derived)
@@ -162,6 +164,86 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 `Pitch` object initializes by `pitch.Pitch()`
 
+`__init__(data, inning, top_bottom, at_bat, pitch)`
+  - `data` must be a data frame containing a full Trackman game
+  - `inning` must be an integer indicating an inning within the game
+  - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
+  - `at_bat` must be an integer indicating a plate appearance within the half inning
+  - `pitch` must be an integer indicating a pitch within the plate appearance
+
+  - Initialized within the `Pitch` object are:
+    - `.game_data` (full game data from which this `Pitch` is derived)
+    - `.inning_data` (full inning data (as opposed to half inning data) from which this `Pitch` is derived)
+    - `.half_inning_data` (half inning data from which this `Pitch` is derived)
+    - `.at_bat_data` (at bat data from which this `Pitch` is derived)
+    - `.data` (pitch data)
+    - `.number` (pitch number of at bat)
+    - `.velocity` (pitch velocity)
+    - `.vertical` (vertical break)
+    - `.induced` (induced vertical break)
+    - `.horizontal` (horizontal break)
+    - `.spin` (spin rate)
+    - `.axis` (spin axis)
+    - `.tilt` (pitch tilt)
+    - `.release_height` (release height)
+    - `.release_side` (release side)
+    - `.release_extension` (pitcher extension)
+    - `.auto_type` (auto tagged pitch type)
+    - `.tagged_type` (tagger tagged pitch type)
+    - `.call` (pitch call {ball, strike, swing, in play, etc.})
+    - `.location_height` (pitch height when crossing the plate)
+    - `.location_side` (pitch side location when crossing the plate)
+    - `.exit_velocity` (exit speed of batted ball)
+    - `.launch_angle` (exit angle of batted ball)
+    - `.hit_direction` (exit direction of batted ball)
+    - `.hit_spin` (spin rate of batted ball)
+    - `.hit_type` (tagged hit type {ground ball, fly ball, etc.})
+    - `.distance` (estimated distance travelled of batted ball)
+    - `.hang_time` (estimated hang time of batted ball)
+    - `.hit_bearing` (estimated landing direction of batted ball)
+    - `.result` (play result {single, out, error, etc.})
+    - `.outs_made` (number of outs recorded on the play)
+    - `.runs_scored` (number of runs scored on play)
+    - `.catcher_velocity` (velocity of catcher throw)
+    - `.catcher_pop` (estimated pop time of catcher throw)
+    - `.k_or_bb` (if a strikeout or walk was recorded)
+    - `.vert_approach_angle` (vertical angle in which pitch crosses home plate)
+    - `.horz_approach_angle` (horizontal angle in which pitch crosses home plate)
+    - `.zone_speed` (velocity of pitch when crossing home plate)
+    - `.zone_time` (estimated amount of time pitch is in the zone)
+    - `.pos_at_110x` (position of batted ball in X direction when 110 feet from home plate)
+    - `.pos_at_110y` (position of batted ball in Y direction when 110 feet from home plate)
+    - `.pos_at_110z` (position of batted ball in Z direction when 110 feet from home plate)
+    - `.last_tracked_distance` (distance from home plate batted ball was before Trackman lost track of ball)
+    - `.pfxx` (an estimation of observed pfx movement in X direction)
+    - `.pfxz` (an estimation of observed pfx movement in Z direction)
+    - `.horz_loc_50` (X location when pitch is 50 feet from home)
+    - `.from_home_loc_50` (Y location when pitch is 50 feet from home, should always be 50)
+    - `.vert_loc_50` (Z location when pitch is 50 feet from home)
+    - `.horz_velo_50` (velocity in X direction when pitch is 50 feet from home)
+    - `.from_home_velo_50` (velocity in Y direction when pitch is 50 feet from home)
+    - `.vert_velo_50` (velocity in Z direction when pitch is 50 feet from home)
+    - `.horz_acc_50` (acceleration in X direction when pitch is 50 feet from home)
+    - `.from_home_acc_50` (acceleration in Y direction when pitch is 50 feet from home)
+    - `.vert_acc_50` (acceleration in Z direction when pitch is 50 feet from home)
+    - `.con_pos_x` (where the pitch is contacted in X direction)
+    - `.con_pos_y` (where the pitch is contacted in Y direction)
+    - `.con_pos_z` (where the pitch is contacted in Z direction)
+    - `.hit_spin_axis` (spin axis of batted ball)
+
+  - `.batter()`
+    - Returns a `Batter` object of the batter at bat during the pitch
+      
+  - `.pitcher()`
+    - Returns a `Pitcher` object of the pitcher on record during the pitch
+      
+  - `.catcher()`
+    - Returns a `Catcher` object of the catcher on record during the pitch
+   
+  - `.barreled(exit_velocity, launch_angle)`
+    - Returns `True` if the pitch was barreled
+    - `exit_velocity` must be a float containing the exit speed of the batted ball
+    - `launch angle` must be a float containing the exit angle of the batted ball
 
 ## Examples and Tutorials
 Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.

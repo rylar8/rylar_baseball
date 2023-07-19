@@ -20,9 +20,6 @@ game1.loadCSV('csv//raw_trackman_file.csv')
 
 The **Game** class has methods such as **toDatabase()**, **updateStats()**, **writeBatterReports()**, **writePitcherReports()**, and more.
 
-## Data Handling
-Explanation of how the **rylar_baseball** library converts raw Trackman Baseball CSV data into objects. Overview of the key classes provided by the library, such as **Game**, **Player**, **Team**, etc. Usage examples demonstrating how to work with these objects and access their attributes.
-
 ## Objects and Methods Reference
 ### `Game`
 `loadCSV(csv, writeData=True)`

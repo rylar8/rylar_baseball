@@ -11,9 +11,10 @@ The **rylar_baseball** library was created to ease the handling of Trackman Base
 ## Getting Started
 Importing **rylar_baseball** library into a Python script is as easy as **from** rylar_baseball **import** *. Reading in a Trackman CSV is as easy as: 
 
-```game1 = game.Game()
+```python
+  game1 = game.Game()
 
-game1.loadCSV('csv//raw_trackman_file.csv').```
+  game1.loadCSV('csv//raw_trackman_file.csv')```
 
 The Game class has methods such as **toDatabase()**, **updateStats()**, **writeBatterReports()**, **writePitcherReports()**, and more.
 

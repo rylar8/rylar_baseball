@@ -22,68 +22,88 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ## Objects and Methods Reference
 ### `Game`
-`loadCSV(csv, writeData=True)`
+
+`Game` object initializes by `game.Game()`
+
+`__init__`
+  - Nothing initializes until the `Game` object loads data via `.loadCSV`, `.loadDF`, or `.loadID`
+
+`.loadCSV(csv, writeData=True)`
   - Reads in Trackman csv initializing basic attributes:
-    - `data` (pandas dataframe of game data)
-    - `stadium` (Trackman stadium name)
-    - `league` (Trackman level name)
-    - `division` (Trackman league name)
-    - `trackman_id` (Trackman GameID)
-    - `date` (date of game)
-    - `year` (year of game)
-    - `time` (time of first pitch)
-    - `home` (initializes `Team` object for home team)
-    - `away` (initializes `Team` object for away team)
-    - `timestamp` (time of file upload)
+    - `.data` (pandas dataframe of game data)
+    - `.stadium` (Trackman stadium name)
+    - `.league` (Trackman level name)
+    - `.division` (Trackman league name)
+    - `.trackman_id` (Trackman GameID)
+    - `.date` (date of game)
+    - `.year` (year of game)
+    - `.time` (time of first pitch)
+    - `.home` (initializes `Team` object for home team)
+    - `.away` (initializes `Team` object for away team)
+    - `.timestamp` (time of file upload)
   - If `writeData` is set to the default True value then:
-    - `toDatabase()` and `updateStats()` will run automatically
+    - `.toDatabase()` and `.updateStats()` will run automatically
       
-`loadDF(data, writeData=True)`
+`.loadDF(data, writeData=True)`
   - Reads in dataframe initializing its basic attributes (see `loadCSV`)
   - If `writeData` is set to the default True value then:
     - `toDatabase()` and `updateStats()` will run automatically
       
-`loadID(game_id)`
+`.loadID(game_id)`
   - Accesses the database, initializing a Game object and its basic attributes (see `loadCSV`) from the given Trackman GameID
     
-`innings(top_bottom)`
+`.innings(top_bottom)`
   - Returns a list of `Inning` objects for each half inning in the game according to the `top_bottom` argument
   - `top_bottom` strictly accepts either 'top' or 'bottom' to specify which half of each inning to populate the return list with
     
-`batters()`
+`.batters()`
   - Returns a list of `Batter` objects for every batter in the game
     
-`catchers()`
+`.catchers()`
   - Returns a list of `Catcher` objects for every catcher in the game
     
-`pitchers()`
+`.pitchers()`
   - Returns a list of `Pitcher` objects for every pitcher in the game
     
-`adjustZone(stadium_id)`
+`.adjustZone(stadium_id)`
   - A proposed method to roughly adjust Trackman data when it is obvious a miscalibration exists. The method would use all available data to provide a normal distribution of pitches. Each stadium would receive an adjustment X,Y,Z value to align closer with the normal distribution of pitches.
     
-`pitcherStatline(pitcher_id)`
+`.pitcherStatline(pitcher_id)`
   - Returns a statline (K, H, R, BB, HBP) for the `pitcher_id` provided
   - `pitcher_id` should reference a Trackman provided pitcher_id who pitched in the game
 
-`movementPlot(pitcher_id, view='pitcher')`
+`.movementPlot(pitcher_id, view='pitcher')`
   - Saves a png image (saved as `{date}{game_id}{pitcher_id}movement_plot.png`) in a file named 'temporary_figures' of a pitcher's average movement by pitch type overlayed on a X-Y plane. Currently this is only used in `writePitcherReports`
   - `pitcher_id` should reference a Trackman provided pitcher_id who pitched in the game
   - `view` strictly accepts either 'pitcher' or 'catcher' to dictate which perspective the graph should be oriented. 'pitcher' is the default value
 
-`toDatabase()`
+`.toDatabase()`
   - Writes the game to the database. If any object within the game file is new to the database then information may be requested to properly store the new object. ie. if the game contains a team who is not currently in the database then a proper team name will be requested
 
-`writeBatterReports(team_id)`
+`.writeBatterReports(team_id)`
   - Uses an Excel template to generate a postgame breakdown of each batter's at bats, providing pitch locations, swing decisions, ball flight metrics, and more.
   - `team_id` expects a Trackman ID corresponding to the team of batters for which reports should be generated
 
-`writePitcherReports(team_id)`
+`.writePitcherReports(team_id)`
   - Uses an Excel template to generate a postgame breakdown of each pitcher's inning pitched, providing pitch locations, pitch metrics, and more.
   - `team_id` expects a Trackman ID corresponding to the team of pitchers for which reports should be generated
     
-`updateStats()`
+`.updateStats()`
   - Updates the statistics tables in the database, using the `upload_timestamp` to only update players stats who were involved in recent game uploads. This method currently has efficiency issues and is being troubleshooted
+
+### `Inning`
+
+`Inning` object initializes by `inning.Inning()`. `Inning` objects are currently only generated from `Game` objects via the `.innings()` method.
+
+`__init__(data, inning, top_bottom)`
+  - `data` must be data frame containing a full Trackman game
+  - `inning` must be an integer indicating an inning within the game
+  - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
+  - Initialized within the `Inning` object are:
+    - `.game_data` (full game data from which this `Inning` is derived)
+    - `.top_bottom` (a string containing 'top' or 'bottom' indicating the half of the inning)
+    - `date` (date of game)
+    - `game_id` (Trackman GameID)
 
 ## Examples and Tutorials
 Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.

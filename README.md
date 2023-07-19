@@ -1,13 +1,20 @@
 # rylar_baseball Library Documentation
 
+**Please note that documentation is a work in progress, as is the rest of the library**
+
 ## Introduction
-Overview of the **rylar_baseball** library and its purpose. Explanation of how the library handles raw Trackman Baseball CSV data. Mention the key objects provided by the library, such as **Game**, **Player**, **Team**, etc.
+The **rylar_baseball** library was created to ease the handling of Trackman Baseball data. The library reads in game files, writes them to SQL, and creates relevant objects to make tool building and data visualization easier. The key objects provided by the library, include **Game**, **Inning**, **AtBat**, **Pitch**, **Team**, **Player**, etc. The library assigns all relevant Trackman data to each instance of these objects allowing database querying to be as simple as accessing a batter's average exit velocity with sample_batter.avg_ev(). 
 
 ## Installation
-Step-by-step instructions for installing the **rylar_baseball** library using pip.
+**rylar_baseball** library is currently not availble for download. Upon a workable project this will be updated. Currently **rylar_baseball** is only intended for private use by its owner.
 
 ## Getting Started
-Importing the **rylar_baseball** library into a Python script or interactive session. Loading and accessing Trackman Baseball CSV data using the library's functions or classes. Basic example showcasing the usage of the library.
+Importing **rylar_baseball** library into a Python script is as easy as **from rylar_baseball import** *. Reading in a Trackman CSV is as easy as: 
+
+game1 = game.Game()
+game1.loadCSV('csv//raw_trackman_file.csv').
+
+The Game class has methods such as **toDatabase()**, **updateStats()**, **writeBatterReports()**, **writePitcherReports()**, and more.
 
 ## Data Handling
 Explanation of how the **rylar_baseball** library converts raw Trackman Baseball CSV data into objects. Overview of the key classes provided by the library, such as **Game**, **Player**, **Team**, etc. Usage examples demonstrating how to work with these objects and access their attributes.

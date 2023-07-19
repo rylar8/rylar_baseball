@@ -24,7 +24,7 @@ Explanation of how the **rylar_baseball** library converts raw Trackman Baseball
 **Game**
 - loadCSV(csv, writeData=True)
   - Reads in trackman csv initializing basic attributes:
-    - data (pandas dataframe of game data)
+    - `data` (pandas dataframe of game data)
     - stadium (Trackman stadium name)
     - league (Trackman level name)
     - division (Trackman league name)

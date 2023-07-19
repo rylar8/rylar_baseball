@@ -93,17 +93,75 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `Inning`
 
-`Inning` object initializes by `inning.Inning()`. `Inning` objects are currently only generated from `Game` objects via the `.innings()` method.
+`Inning` object initializes by `inning.Inning()`
+
+*Note that an `Inning` object is really only a half inning*
 
 `__init__(data, inning, top_bottom)`
-  - `data` must be data frame containing a full Trackman game
+  - `data` must be a data frame containing a full Trackman game
   - `inning` must be an integer indicating an inning within the game
   - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
   - Initialized within the `Inning` object are:
     - `.game_data` (full game data from which this `Inning` is derived)
     - `.top_bottom` (a string containing 'top' or 'bottom' indicating the half of the inning)
-    - `date` (date of game)
-    - `game_id` (Trackman GameID)
+    - `.inning_data` (full inning data (as opposed to half inning data) from which this `Inning` is derived)
+    - `.date` (date of game)
+    - `.game_id` (Trackman GameID)
+    - `.data` (half inning data)
+    - `.number` (inning number of the game)
+
+`.at_bats()`
+  - Returns a list of `AtBat` objects for every at bat within the inning
+
+`.pitcherStatline(pitcher_id)`
+  - Returns an inning statline (K, R, H, BB, HBP) for the `pitcher_id` provided
+  - `pitcher_id` should reference a Trackman provided pitcher_id who pitched in the half inning
+
+`.movementPlot(pitcher_id, view='pitcher')`
+  - Saves a png image (saved as `{date}{game_id}{number}{pitcher_id}movement_plot.png`) in a file named 'temporary_figures' of a pitcher's average movement by pitch type overlayed on a X-Y plane. Currently this is only used in `writePitcherReports`
+  - `pitcher_id` should reference a Trackman provided pitcher_id who pitched in the half inning
+  - `view` strictly accepts either 'pitcher' or 'catcher' to dictate which perspective the graph should be oriented. 'pitcher' is the default value
+
+### `AtBat`
+
+`AtBat` object initializes by `atbat.AtBat()`
+
+`__init__(data, inning, top_bottom, at_bat)`
+  - `data` must be a data frame containing a full Trackman game
+  - `inning` must be an integer indicating an inning within the game
+  - `top_bottom` must be a string strictly containing either 'top' or 'bottom'
+  - `at_bat` must be an integer indicating a plate appearance within the half inning
+  - Initialized within the `AtBat` object are:
+    - `.inning` (inning number of the game)
+    - `.game_data` (full game data from which this `AtBat` is derived)
+    - `.top_bottom` (a string containing 'top' or 'bottom' indicating the half of the inning)
+    - `.inning_data` (full inning data (as opposed to half inning data) from which this `AtBat` is derived)
+    - `.half_inning_data` (half inning data from which this `AtBat` is derived)
+    - `.data` (at bat data)
+    - `.number` (plate appearance number of the half inning)
+    - `.outs` (number of outs when the at bat began)
+    - `.date` (date of game)
+  
+`.pitches()`
+  - Returns a list of `Pitch` objects for every pitch within the at bat
+
+`.batter()`
+  - Returns a `Batter` object of the batter who began the at bat
+
+`.pitcher()`
+  - Returns a `Pitcher` object of the pitcher who began the at bat
+
+`.catcher()`
+  - Returns a `Catcher` object of the catcher who began the at bat
+
+`.zoneTracer(view='pitcher')`
+  - Saves a png image (saved as `{date}{top_bottom}{inning}{number}zone_tracer.png`) in a file named 'temporary_figures' of a pitcher's pitch locations and pitch type overlayed on a strikezone
+  - `view` strictly accepts either 'pitcher' or 'catcher' to dictate which perspective the graph should be oriented. 'pitcher' is the default value 
+
+### `Pitch`
+
+`Pitch` object initializes by `pitch.Pitch()`
+
 
 ## Examples and Tutorials
 Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.

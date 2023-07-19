@@ -4,7 +4,7 @@ from matplotlib.patches import Rectangle, Polygon
 from . import pitch, player
 
 class AtBat():
-    def __init__(self, data, inning, at_bat, top_bottom):
+    def __init__(self, data, inning, top_bottom, at_bat):
         self.inning = inning
         self.game_data = data
         self.top_bottom = top_bottom
@@ -26,7 +26,7 @@ class AtBat():
     def pitches(self):
         pitches = []
         for i in range(len(set(self.data['PitchofPA']))):
-            pitches.append(pitch.Pitch(self.game_data, self.inning, self.number, i+1, self.top_bottom))
+            pitches.append(pitch.Pitch(self.game_data, self.inning, self.top_bottom, self.number, i+1))
         return pitches
     
     def batter(self):

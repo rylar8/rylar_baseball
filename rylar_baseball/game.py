@@ -143,6 +143,8 @@ class Game:
         self.time = self.data.iloc[0]['Time']
         self.home = team.Team(self.data.iloc[0]['HomeTeam'])
         self.away = team.Team(self.data.iloc[0]['AwayTeam'])
+        cur.execute('SELECT upload_timestamp FROM games WHERE trackman_id = ?', (game_id,))
+        self.timestamp = cur.fetchone()[0]
         conn.close()
 
     def innings(self, top_bottom):
@@ -515,8 +517,8 @@ class Game:
             pos_at_110y = pitch.PositionAt110Y
             pos_at_110z = pitch.PositionAt110Z
             last_tracked_distance = pitch.LastTrackedDistance
-            last40_horz_break = pitch.pfxx
-            last40_vert_break = pitch.pfxz
+            pfxx = pitch.pfxx
+            pfxz = pitch.pfxz
             horz_loc_50 = pitch.x0
             from_home_loc_50 = pitch.y0
             vert_loc_50 = pitch.z0
@@ -537,7 +539,7 @@ class Game:
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
             hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop,
             k_or_bb_id, vert_approach_angle, horz_approach_angle, zone_speed, zone_time, pos_at_110x, pos_at_110y, pos_at_110z,
-            last_tracked_distance, last40_horz_break, last40_vert_break, horz_loc_50, from_home_loc_50, vert_loc_50, horz_velo_50,
+            last_tracked_distance, pfxx, pfxz, horz_loc_50, from_home_loc_50, vert_loc_50, horz_velo_50,
             from_home_velo_50, vert_velo_50, horz_acc_50, from_home_acc_50, vert_acc_50, con_pos_x, con_pos_y, con_pos_z, hit_spin_axis, self.timestamp))
 
         try:
@@ -547,7 +549,7 @@ class Game:
             tagged_type_id, call_id, location_height, location_side, exit_velocity, launch_angle, hit_direction, hit_spin, 
             hit_type_id, distance, hang_time, hit_bearing, result_id, outs_made, runs_scored, catcher_velocity, catcher_pop, k_or_bb_id,
             vert_approach_angle, horz_approach_angle, zone_speed, zone_time, pos_at_110x, pos_at_110y, pos_at_110z, last_tracked_distance,
-            last_40_horz_break_batter_view, last_40_vert_break_batter_view, horz_loc_50, home_loc_50, vert_loc_50,
+            pfxx, pfxz, horz_loc_50, home_loc_50, vert_loc_50,
             horz_velo_50, home_velo_50, vert_velo_50, horz_acc_50, home_acc_50, vert_acc_50, contact_pos_x,
             contact_pos_y, contact_pos_z, hit_spin_axis,upload_timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
@@ -594,7 +596,7 @@ class Game:
                 ws[f'J{i+10}'] = inning_ = ab[0]
                 pa_of_inning = ab[1]
                 top_bottom = ab[2].lower()
-                at_bat = atbat.AtBat(self.data, inning_, pa_of_inning, top_bottom)
+                at_bat = atbat.AtBat(self.data, inning_, top_bottom, pa_of_inning)
                 
                 ws[f'J{i+11}'] = at_bat.outs
                 ws[f'J{i+12}'] = 'Coming Soon' #Home

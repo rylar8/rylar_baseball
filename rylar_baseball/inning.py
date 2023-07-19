@@ -7,7 +7,7 @@ class Inning():
         self.game_data = data
         self.top_bottom = top_bottom
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
-        self.date = pd.to_datetime(self.game_data.iloc[0]['Date']).date()
+        self.date = pd.to_datetime(self.game_data.iloc[0]['UTCDateTime']).date()
         self.game_id = self.game_data.iloc[0]['GameID']
 
         if top_bottom == 'top':
@@ -22,7 +22,7 @@ class Inning():
     def at_bats(self):
         at_bats = []
         for i in range(len(set(self.data['PAofInning']))):
-            at_bats.append(atbat.AtBat(self.game_data, self.number, i+1, self.top_bottom))
+            at_bats.append(atbat.AtBat(self.game_data, self.number, self.top_bottom, i+1))
         return at_bats
     
     def pitcherStatline(self, pitcher_id):

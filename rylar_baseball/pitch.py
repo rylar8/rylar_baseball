@@ -1,6 +1,8 @@
+from . import player
+
 
 class Pitch():
-    def __init__(self, data, inning, at_bat, pitch, top_bottom = 'both'):
+    def __init__(self, data, inning, top_bottom, at_bat, pitch):
         self.game_data = data
 
         self.inning_data = self.game_data[self.game_data['Inning'] == inning]
@@ -16,12 +18,6 @@ class Pitch():
         self.number = pitch
 
         if len(self.data) > 0:
-            self.batter = self.data['Batter'].iloc[0]
-            self.batter_id = self.data['BatterId'].iloc[0]
-            self.pitcher = self.data['Pitcher'].iloc[0]
-            self.pitcher_id = self.data['PitcherId'].iloc[0]
-            self.catcher = self.data['Catcher'].iloc[0]
-            self.catcher_id = self.data['CatcherId'].iloc[0]
             self.velocity = self.data['RelSpeed'].iloc[0]
             self.vertical = self.data['VertBreak'].iloc[0]
             self.induced = self.data['InducedVertBreak'].iloc[0]
@@ -59,8 +55,8 @@ class Pitch():
             self.pos_at_110y = self.data['PositionAt110Y'].iloc[0]
             self.pos_at_110z = self.data['PositionAt110Z'].iloc[0]
             self.last_tracked_distance = self.data['LastTrackedDistance'].iloc[0]
-            self.last40_horz_break = self.data['pfxx'].iloc[0]
-            self.last40_vert_break = self.data['pfxz'].iloc[0]
+            self.pfxx = self.data['pfxx'].iloc[0]
+            self.pfxz = self.data['pfxz'].iloc[0]
             self.horz_loc_50 = self.data['x0'].iloc[0]
             self.from_home_loc_50 = self.data['y0'].iloc[0]
             self.vert_loc_50 = self.data['z0'].iloc[0]
@@ -75,6 +71,14 @@ class Pitch():
             self.con_pos_z = self.data['ContactPositionZ'].iloc[0]
             self.hit_spin_axis = self.data['HitSpinAxis'].iloc[0]
 
+    def batter(self):
+        return player.Batter(list(self.data['BatterId'])[0])
+
+    def pitcher(self):
+        return player.Pitcher(list(self.data['PitcherId'])[0])
+    
+    def catcher(self):
+        return player.Catcher(list(self.data['CatcherId'])[0])
 
     def barreled(self, exit_velocity, launch_angle):
 

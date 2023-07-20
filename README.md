@@ -93,7 +93,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `Inning`
 
-`Inning` object initializes by `inning.Inning()`
+`Inning` object initializes by `inning.Inning(inning, top_bottom)`
 
 *Note that an `Inning` object is really only a half inning*
 
@@ -125,7 +125,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `AtBat`
 
-`AtBat` object initializes by `atbat.AtBat()`
+`AtBat` object initializes by `atbat.AtBat(inning, top_bottom, at_bat)`
 
 `__init__(data, inning, top_bottom, at_bat)`
   - `data` must be a data frame containing a full Trackman game
@@ -162,7 +162,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `Pitch`
 
-`Pitch` object initializes by `pitch.Pitch()`
+`Pitch` object initializes by `pitch.Pitch(inning, top_bottom, at_bat, pitch)`
 
 `__init__(data, inning, top_bottom, at_bat, pitch)`
   - `data` must be a data frame containing a full Trackman game
@@ -231,19 +231,75 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
     - `.con_pos_z` (where the pitch is contacted in Z direction)
     - `.hit_spin_axis` (spin axis of batted ball)
 
-  - `.batter()`
-    - Returns a `Batter` object of the batter at bat during the pitch
+`.batter()`
+  - Returns a `Batter` object of the batter at bat during the pitch
       
-  - `.pitcher()`
-    - Returns a `Pitcher` object of the pitcher on record during the pitch
+`.pitcher()`
+  - Returns a `Pitcher` object of the pitcher on record during the pitch
       
-  - `.catcher()`
-    - Returns a `Catcher` object of the catcher on record during the pitch
+`.catcher()`
+  - Returns a `Catcher` object of the catcher on record during the pitch
    
-  - `.barreled(exit_velocity, launch_angle)`
+`.barreled(exit_velocity, launch_angle)`
     - Returns `True` if the pitch was barreled
     - `exit_velocity` must be a float containing the exit speed of the batted ball
     - `launch angle` must be a float containing the exit angle of the batted ball
+   
+### `GameState`
+
+`GameState` object initializes by `gamestate.GameState()`
+
+*This is a proposed module that would offer a simple way to tag base-out states and align the info with Trackman data for more in-depth analysis*
+
+`__init__`
+  - Initialized within the `GameState` object are:
+    - `.runners` (a dictionary containing base states)
+    - `.outs` (the number of outs)
+    - `.score` (a dictionary containing home and away score)
+    - `.errors_made` (an error tracker, a proposed way to track which runners are earned or unearned by pitcher)
+   
+### `Team`
+
+`Team` object initializes by `team.Team()`
+
+`__init__`
+  - `trackman_id` must be a team Trackman ID
+    
+  - Initialized within the `Team` object are:
+    - `.trackman_id` (team's Trackman ID)
+
+`.games()`
+  - Returns a list of `Game` objects containing every game the team has played in from the database
+
+`.toDatabase()`
+  - Proposed method to directly add or alter a team's information in the database without a game file
+
+`.pitchers()`
+  - Returns a list of `Pitcher` objects containing every pitcher the team has in the database
+
+`.batters()`
+  - Returns a list of `Batter` objects containing every batter the team has in the database
+
+`.catchers()`
+  - Returns a list of `Catcher` objects containing every catcher the team has in the database
+
+`.addPlayer()`
+  - Proposed method to connect a player to a team in the database, possibly removing or altering his connecting with a previous team
+
+`.writeBatterScouting()`
+  - Proposed method to generate batter scouting reports for every batter connected to the team, in a similar fashion of the `writeBatterScouting` method
+
+`.writePitcherScouting()`
+  - Proposed method to generate pitcher scouting reports for every pitcher connected to the team
+
+`writeSprayCharts`
+  - Proposed method to generate spray charts for every batter on the team
+
+`writeRunCards`
+  - Proposed method to generate run game cards for every pitcher and catcher on the team
+
+`optimizeLineup`
+  - Proposed method to generate lineup optimization based on team success and projected pitching matchups
 
 ## Examples and Tutorials
 Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.

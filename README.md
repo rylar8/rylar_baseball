@@ -251,7 +251,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 *This is a proposed module that would offer a simple way to tag base-out states and align the info with Trackman data for more in-depth analysis*
 
-`__init__`
+`__init__()`
   - Initialized within the `GameState` object are:
     - `.runners` (a dictionary containing base states)
     - `.outs` (the number of outs)
@@ -260,9 +260,9 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
    
 ### `Team`
 
-`Team` object initializes by `team.Team()`
+`Team` object initializes by `team.Team(trackman_id)`
 
-`__init__`
+`__init__(trackman_id)`
   - `trackman_id` must be a team Trackman ID
     
   - Initialized within the `Team` object are:
@@ -292,26 +292,90 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 `.writePitcherScouting()`
   - Proposed method to generate pitcher scouting reports for every pitcher connected to the team
 
-`writeSprayCharts`
+`.writeSprayCharts`
   - Proposed method to generate spray charts for every batter on the team
 
-`writeRunCards`
+`.writeRunCards`
   - Proposed method to generate run game cards for every pitcher and catcher on the team
 
-`optimizeLineup`
+`.optimizeLineup`
   - Proposed method to generate lineup optimization based on team success and projected pitching matchups
 
+### `Player`
+
+*The `Player` module is broken up into four different classes: `Pitcher`, `Batter`, `Catcher`, `Baserunner`. All four objects share a parent class: `Player`*
+
+#### `Player`
+
+`Player` object initializes by player.Player(trackman_id)
+
+`__init__(trackman_id)`
+  - `trackman_id` must be a player Trackman ID
+
+  - Initialized within the `Player` object are:
+    - `.trackman_id` (player's Trackman ID)
+    - `.conn` (connection to database {easier to write once and then `super().__init__(trackman_id)` for the child classes})
+    - `.cur` (cursor to database)
+
+#### `Pitcher`
+
+`Pitcher` object initializes by `player.Pitcher(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (pitcher's name as in Trackman)
+  - `.player_id` (pitcher's database ID)
+  - `.side` (pitcher's throwing side)
+  - `.team_id` (pitcher's team's database ID)
+  - `.team_name` (pitcher's team's name)
+  - `.team_trackman` (pitcher's team's Trackman ID)
+
+#### `Batter`
+
+`Batter` object initializes by `player.Batter(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (batter's name as in Trackman)
+  - `.player_id` (batter's database ID)
+  - `.side` (batter's hitting side)
+  - `.team_id` (batter's team's database ID)
+  - `.team_name` (batter's team's name)
+  - `.team_trackman` (batter's team's Trackman ID)
+
+`.probableStrikezone()`
+  - A proposed method to use binary classification to estimate the height and width of the batter's strike zone
+
+#### `Catcher`
+
+`Catcher` object initializes by `player.Catcher(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (catcher's name as in Trackman)
+  - `.player_id` (catcher's database ID)
+  - `.side` (catcher's throwing side)
+  - `.team_id` (catcher's team's database ID)
+  - `.team_name` (catcher's team's name)
+  - `.team_trackman` (catcher's team's Trackman ID)
+
+#### `Baserunner`
+
+`Baserunner` object initializes by `player.Baserunner(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Batter` class)
+
 ## Examples and Tutorials
-Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.
+
 
 ## Configuration and Customization
-Documentation on any configuration options or settings available in the library. Instructions for customizing the behavior of the library based on user requirements. Best practices and recommendations for optimal configuration.
+
 
 ## Troubleshooting and FAQs
-Common issues users may encounter when working with the **rylar_baseball** library. Troubleshooting steps and solutions for resolving these issues. Frequently asked questions and their corresponding answers.
+
 
 ## Contributing and Support
-Guidelines for users who want to contribute to the **rylar_baseball** library. Information on how to report bugs, suggest new features, or submit pull requests. Contact details for getting support or assistance with the library.
+
 
 ## License and Acknowledgments
-Licensing information for the **rylar_baseball** library. Acknowledgment and credits to any external libraries or resources used.

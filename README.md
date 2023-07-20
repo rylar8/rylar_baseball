@@ -18,8 +18,6 @@ game1 = game.Game()
 game1.loadCSV('csv//raw_trackman_file.csv')
 ```
 
-The **Game** class has methods such as **toDatabase()**, **updateStats()**, **writeBatterReports()**, **writePitcherReports()**, and more.
-
 ## Objects and Methods Reference
 ### `Game`
 

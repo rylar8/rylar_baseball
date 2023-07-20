@@ -3,13 +3,13 @@
 **Please note that documentation is a work in progress, as is the rest of the library**
 
 ## Introduction
-The **rylar_baseball** library was created to ease the handling of Trackman Baseball data. The library reads in game files, writes them to SQL, and creates relevant objects to make tool building and data visualization easier. The key objects provided by the library, include **Game**, **Inning**, **AtBat**, **Pitch**, **Team**, **Player**, etc. The library assigns all relevant Trackman data to each instance of these objects allowing database querying to be as simple as accessing a batter's average exit velocity with **sample_batter.avg_ev**.
+The **rylar_baseball** library was created to ease the handling of Trackman Baseball data. The library reads in game files, writes them to SQL, and creates relevant objects to make tool building and data visualization easier. The key objects provided by the library, include **Game**, **Inning**, **AtBat**, **Pitch**, **Team**, **Player**, etc. The library assigns all relevant Trackman data to each instance of these objects allowing database querying to be as simple as accessing a batter's average exit velocity with `sample_batter.avg_ev`.
 
 ## Installation
 **rylar_baseball** library is currently not availble for download. Upon a workable project this will be updated. Currently **rylar_baseball** is only intended for private use by its owner.
 
 ## Getting Started
-Importing **rylar_baseball** library into a Python script is as easy as `from rylar_baseball import *`
+Importing **rylar_baseball** library into a Python script will be as easy as `from rylar_baseball import *`
 
 Reading in a Trackman CSV is as easy as: 
 
@@ -17,8 +17,6 @@ Reading in a Trackman CSV is as easy as:
 game1 = game.Game()
 game1.loadCSV('csv//raw_trackman_file.csv')
 ```
-
-The **Game** class has methods such as **toDatabase()**, **updateStats()**, **writeBatterReports()**, **writePitcherReports()**, and more.
 
 ## Objects and Methods Reference
 ### `Game`
@@ -93,7 +91,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `Inning`
 
-`Inning` object initializes by `inning.Inning()`
+`Inning` object initializes by `inning.Inning(inning, top_bottom)`
 
 *Note that an `Inning` object is really only a half inning*
 
@@ -125,7 +123,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `AtBat`
 
-`AtBat` object initializes by `atbat.AtBat()`
+`AtBat` object initializes by `atbat.AtBat(inning, top_bottom, at_bat)`
 
 `__init__(data, inning, top_bottom, at_bat)`
   - `data` must be a data frame containing a full Trackman game
@@ -162,7 +160,7 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
 
 ### `Pitch`
 
-`Pitch` object initializes by `pitch.Pitch()`
+`Pitch` object initializes by `pitch.Pitch(inning, top_bottom, at_bat, pitch)`
 
 `__init__(data, inning, top_bottom, at_bat, pitch)`
   - `data` must be a data frame containing a full Trackman game
@@ -231,31 +229,151 @@ The **Game** class has methods such as **toDatabase()**, **updateStats()**, **wr
     - `.con_pos_z` (where the pitch is contacted in Z direction)
     - `.hit_spin_axis` (spin axis of batted ball)
 
-  - `.batter()`
-    - Returns a `Batter` object of the batter at bat during the pitch
+`.batter()`
+  - Returns a `Batter` object of the batter at bat during the pitch
       
-  - `.pitcher()`
-    - Returns a `Pitcher` object of the pitcher on record during the pitch
+`.pitcher()`
+  - Returns a `Pitcher` object of the pitcher on record during the pitch
       
-  - `.catcher()`
-    - Returns a `Catcher` object of the catcher on record during the pitch
+`.catcher()`
+  - Returns a `Catcher` object of the catcher on record during the pitch
    
-  - `.barreled(exit_velocity, launch_angle)`
+`.barreled(exit_velocity, launch_angle)`
     - Returns `True` if the pitch was barreled
     - `exit_velocity` must be a float containing the exit speed of the batted ball
     - `launch angle` must be a float containing the exit angle of the batted ball
+   
+### `GameState`
+
+`GameState` object initializes by `gamestate.GameState()`
+
+*This is a proposed module that would offer a simple way to tag base-out states and align the info with Trackman data for more in-depth analysis*
+
+`__init__()`
+  - Initialized within the `GameState` object are:
+    - `.runners` (a dictionary containing base states)
+    - `.outs` (the number of outs)
+    - `.score` (a dictionary containing home and away score)
+    - `.errors_made` (an error tracker, a proposed way to track which runners are earned or unearned by pitcher)
+   
+### `Team`
+
+`Team` object initializes by `team.Team(trackman_id)`
+
+`__init__(trackman_id)`
+  - `trackman_id` must be a team Trackman ID
+    
+  - Initialized within the `Team` object are:
+    - `.trackman_id` (team's Trackman ID)
+
+`.games()`
+  - Returns a list of `Game` objects containing every game the team has played in from the database
+
+`.toDatabase()`
+  - Proposed method to directly add or alter a team's information in the database without a game file
+
+`.pitchers()`
+  - Returns a list of `Pitcher` objects containing every pitcher the team has in the database
+
+`.batters()`
+  - Returns a list of `Batter` objects containing every batter the team has in the database
+
+`.catchers()`
+  - Returns a list of `Catcher` objects containing every catcher the team has in the database
+
+`.addPlayer()`
+  - Proposed method to connect a player to a team in the database, possibly removing or altering his connecting with a previous team
+
+`.writeBatterScouting()`
+  - Proposed method to generate batter scouting reports for every batter connected to the team, in a similar fashion of the `writeBatterScouting` method
+
+`.writePitcherScouting()`
+  - Proposed method to generate pitcher scouting reports for every pitcher connected to the team
+
+`.writeSprayCharts`
+  - Proposed method to generate spray charts for every batter on the team
+
+`.writeRunCards`
+  - Proposed method to generate run game cards for every pitcher and catcher on the team
+
+`.optimizeLineup`
+  - Proposed method to generate lineup optimization based on team success and projected pitching matchups
+
+### `Player`
+
+*The `Player` module is broken up into four different classes: `Pitcher`, `Batter`, `Catcher`, `Baserunner`. All four objects share a parent class: `Player`*
+
+#### `Player`
+
+`Player` object initializes by player.Player(trackman_id)
+
+`__init__(trackman_id)`
+  - `trackman_id` must be a player Trackman ID
+
+  - Initialized within the `Player` object are:
+    - `.trackman_id` (player's Trackman ID)
+    - `.conn` (connection to database {easier to write once and then `super().__init__(trackman_id)` for the child classes})
+    - `.cur` (cursor to database)
+
+#### `Pitcher`
+
+`Pitcher` object initializes by `player.Pitcher(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (pitcher's name as in Trackman)
+  - `.player_id` (pitcher's database ID)
+  - `.side` (pitcher's throwing side)
+  - `.team_id` (pitcher's team's database ID)
+  - `.team_name` (pitcher's team's name)
+  - `.team_trackman` (pitcher's team's Trackman ID)
+
+#### `Batter`
+
+`Batter` object initializes by `player.Batter(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (batter's name as in Trackman)
+  - `.player_id` (batter's database ID)
+  - `.side` (batter's hitting side)
+  - `.team_id` (batter's team's database ID)
+  - `.team_name` (batter's team's name)
+  - `.team_trackman` (batter's team's Trackman ID)
+
+`.probableStrikezone()`
+  - A proposed method to use binary classification to estimate the height and width of the batter's strike zone
+
+#### `Catcher`
+
+`Catcher` object initializes by `player.Catcher(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Player` class)
+  - `.name` (catcher's name as in Trackman)
+  - `.player_id` (catcher's database ID)
+  - `.side` (catcher's throwing side)
+  - `.team_id` (catcher's team's database ID)
+  - `.team_name` (catcher's team's name)
+  - `.team_trackman` (catcher's team's Trackman ID)
+
+#### `Baserunner`
+
+`Baserunner` object initializes by `player.Baserunner(trackman_id)`
+
+`__init__(trackman_id)`
+  - `super().__init__(trackman_id)` (see parent `Batter` class)
 
 ## Examples and Tutorials
-Step-by-step tutorials demonstrating common use cases of the **rylar_baseball** library. In-depth examples showcasing advanced features and functionality. Interactive code snippets for users to try out different scenarios.
+
 
 ## Configuration and Customization
-Documentation on any configuration options or settings available in the library. Instructions for customizing the behavior of the library based on user requirements. Best practices and recommendations for optimal configuration.
+
 
 ## Troubleshooting and FAQs
-Common issues users may encounter when working with the **rylar_baseball** library. Troubleshooting steps and solutions for resolving these issues. Frequently asked questions and their corresponding answers.
+
 
 ## Contributing and Support
-Guidelines for users who want to contribute to the **rylar_baseball** library. Information on how to report bugs, suggest new features, or submit pull requests. Contact details for getting support or assistance with the library.
+
 
 ## License and Acknowledgments
-Licensing information for the **rylar_baseball** library. Acknowledgment and credits to any external libraries or resources used.

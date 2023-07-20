@@ -57,7 +57,7 @@ class Batter(Player):
         self.conn.close()
 
     def probableStrikezone():
-        #Use ML to find estimate for player's strikezone height, would width change by hitter? probably not.
+        #Use binary classification to find estimate for player's strikezone height, would width change by hitter? probably not.
         pass
 
 class Catcher(Player):

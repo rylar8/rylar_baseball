@@ -61,13 +61,13 @@ class Team():
         conn.close()
         return batters
 
-    def addGame(self, Game):
+    def catchers(self):
         pass
 
     def addPlayer(self):
         pass
 
-    def writeHitterScouting(self):
+    def writeBatterScouting(self):
         pass
 
     def writePitcherScouting(self):

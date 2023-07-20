@@ -9,7 +9,7 @@ The **rylar_baseball** library was created to ease the handling of Trackman Base
 **rylar_baseball** library is currently not availble for download. Upon a workable project this will be updated. Currently **rylar_baseball** is only intended for private use by its owner.
 
 ## Getting Started
-Importing **rylar_baseball** library into a Python script will be as as easy as `from rylar_baseball import *`
+Importing **rylar_baseball** library into a Python script will be as easy as `from rylar_baseball import *`
 
 Reading in a Trackman CSV is as easy as: 
 

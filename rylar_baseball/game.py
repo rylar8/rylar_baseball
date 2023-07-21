@@ -1047,6 +1047,26 @@ class Game:
 
         #Hitters 
 
+        cur.executescript('''
+        CREATE PROCEDURE update_batting(b_id INTEGER, ts INTEGER, l_id INTEGER, d_id INTEGER, t_id INTEGER, yr INTEGER) AS
+        BEGIN
+            DELETE FROM batting_stats_standard WHERE batter_id = b_id;
+            INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id,l_id,d_id,t_id,yr,ts);
+            CREATE TEMP TABLE IF NOT EXISTS batter_g_results AS 
+                SELECT batter_id, COUNT(DISTINCT game_id) AS g_count FROM trackman WHERE (upload_timestamp + 43200) > ts GROUP BY batter_id;
+                UPDATE batting_stats_standard SET g = (SELECT g_count FROM batter_g_results WHERE batter_id = b_id) WHERE batter_id = b_id;
+            CREATE TEMP TABLE IF NOT EXISTS batter_ab_results AS 
+                    SELECT batter_id, COUNT(*) AS ab_count
+                    FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY batter_id, game_id, inning, pa_of_inning ORDER BY pitch_num DESC) AS row_num FROM trackman)
+                    WHERE (row_num = 1) AND (k_or_bb_id != 3) AND (result_id != 7) AND (call_id != 6) AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id;
+                    UPDATE batting_stats_standard SET ab = (SELECT ab_count FROM batter_ab_results WHERE batter_id = b_id) WHERE batter_id = b_id;      
+            CREATE TEMP TABLE IF NOT EXISTS batter_pa_results AS
+                SELECT batter_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) AS pa_count FROM trackman WHERE (upload_timestamp + 43200) > ts GROUP BY batter_id
+                UPDATE batting_stats_standard SET pa = (SELECT pa_count FROM batter_pa_results WHERE batter_id = b_id) WHERE batter_id = ?;
+                          
+        END;''')
+
         # Standard
 
         #Get player_ids for players involved in a game uploaded within the last 12 hours

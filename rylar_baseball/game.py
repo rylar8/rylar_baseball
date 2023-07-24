@@ -1051,20 +1051,457 @@ class Game:
         CREATE PROCEDURE update_batting(b_id INTEGER, ts INTEGER, l_id INTEGER, d_id INTEGER, t_id INTEGER, yr INTEGER) AS
         BEGIN
             DELETE FROM batting_stats_standard WHERE batter_id = b_id;
-            INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id,l_id,d_id,t_id,yr,ts);
-            CREATE TEMP TABLE IF NOT EXISTS batter_g_results AS 
-                SELECT batter_id, COUNT(DISTINCT game_id) AS g_count FROM trackman WHERE (upload_timestamp + 43200) > ts GROUP BY batter_id;
-                UPDATE batting_stats_standard SET g = (SELECT g_count FROM batter_g_results WHERE batter_id = b_id) WHERE batter_id = b_id;
-            CREATE TEMP TABLE IF NOT EXISTS batter_ab_results AS 
+            INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id, l_id, d_id, t_id, yr, ts);
+            WITH 
+                batter_g_results AS (
+                    SELECT batter_id, COUNT(DISTINCT game_id) AS g_count
+                    FROM trackman
+                    WHERE (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_ab_results AS (
                     SELECT batter_id, COUNT(*) AS ab_count
-                    FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY batter_id, game_id, inning, pa_of_inning ORDER BY pitch_num DESC) AS row_num FROM trackman)
-                    WHERE (row_num = 1) AND (k_or_bb_id != 3) AND (result_id != 7) AND (call_id != 6) AND (upload_timestamp + 43200) > ts
-                    GROUP BY batter_id;
-                    UPDATE batting_stats_standard SET ab = (SELECT ab_count FROM batter_ab_results WHERE batter_id = b_id) WHERE batter_id = b_id;      
-            CREATE TEMP TABLE IF NOT EXISTS batter_pa_results AS
-                SELECT batter_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) AS pa_count FROM trackman WHERE (upload_timestamp + 43200) > ts GROUP BY batter_id
-                UPDATE batting_stats_standard SET pa = (SELECT pa_count FROM batter_pa_results WHERE batter_id = b_id) WHERE batter_id = ?;
+                    FROM (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY batter_id, game_id, inning, pa_of_inning ORDER BY pitch_num DESC) AS row_num
+                        FROM trackman
+                        WHERE (upload_timestamp + 43200) > ts
+                        AND batter_id = b_id
+                    ) t
+                    WHERE (row_num = 1) AND (k_or_bb_id != 3) AND (result_id != 7) AND (call_id != 6)
+                    GROUP BY batter_id
+                ),
+                batter_pa_results AS (
+                    SELECT batter_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) AS pa_count
+                    FROM trackman
+                    WHERE (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_h_results AS (
+                    SELECT batter_id, COUNT(*) AS h_count
+                    FROM trackman
+                    WHERE result_id <= 4 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_2b_results AS (
+                    SELECT batter_id, COUNT(*) AS _2b_count
+                    FROM trackman
+                    WHERE result_id = 2 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_3b_results AS (
+                    SELECT batter_id, COUNT(*) AS _3b_count
+                    FROM trackman
+                    WHERE result_id = 3 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_hr_results AS (
+                    SELECT batter_id, COUNT(*) AS hr_count
+                    FROM trackman
+                    WHERE result_id = 4 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_rbi_results AS (
+                    SELECT batter_id, SUM(runs_scored) AS rbi_count
+                    FROM trackman
+                    WHERE runs_scored >= 1 AND outs_made < 2 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_bb_results AS (
+                    SELECT batter_id, COUNT(*) AS bb_count
+                    FROM trackman
+                    WHERE k_or_bb_id = 3 AND call_id != 9 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_ibb_results AS (
+                    SELECT batter_id, COUNT(*) AS ibb_count
+                    FROM trackman
+                    WHERE k_or_bb_id = 3 AND call_id = 9 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_so_results AS (
+                    SELECT batter_id, COUNT(*) AS so_count
+                    FROM trackman
+                    WHERE k_or_bb_id = 2 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_hbp_results AS (
+                    SELECT batter_id, COUNT(*) AS hbp_count
+                    FROM trackman
+                    WHERE call_id = 6 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_sac_results AS (
+                    SELECT batter_id, COUNT(*) AS sac_count
+                    FROM trackman
+                    WHERE result_id = 7 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_gdp_results AS (
+                    SELECT batter_id, COUNT(*) AS gdp_count
+                    FROM trackman
+                    WHERE outs_made >= 2 AND hit_type_id = 4 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_tb_results AS (
+                    SELECT batter_id, (h_count - _2b_count - _3b_count - hr_count + 2*_2b_count + 3*_3b_count + 4*hr_count) AS tb_count
+                    FROM batter_h_results
+                    LEFT JOIN batter_2b_results USING (batter_id)
+                    LEFT JOIN batter_3b_results USING (batter_id)
+                    LEFT JOIN batter_hr_results USING (batter_id)
+                    WHERE batter_id = b_id
+                )
                           
+            UPDATE batting_stats_standard
+            SET g = (SELECT g_count FROM batter_g_results),
+                ab = (SELECT ab_count FROM batter_ab_results),
+                pa = (SELECT pa_count FROM batter_pa_results),
+                h = (SELECT h_count FROM batter_h_results),
+                _2b = (SELECT _2b_count FROM batter_2b_results),
+                _3b = (SELECT _3b_count FROM batter_3b_results),
+                hr = (SELECT hr_count FROM batter_hr_results),
+                rbi = (SELECT rbi_count FROM batter_rbi_results),
+                bb = (SELECT bb_count FROM batter_bb_results),
+                ibb = (SELECT ibb_count FROM batter_ibb_results),
+                so = (SELECT so_count FROM batter_so_results),
+                hbp = (SELECT hbp_count FROM batter_hbp_results),
+                sac = (SELECT sac_count FROM batter_sac_results),
+                gdp = (SELECT gdp_count FROM batter_gdp_results),
+                tb = (SELECT tb_count FROM batter_tb_results)
+            WHERE batter_id = b_id;
+            
+            DELETE FROM batting_stats_statcast WHERE batter_id = b_id;
+            INSERT INTO batting_stats_statcast (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id, l_id, d_id, t_id, yr, ts);
+
+            WITH 
+                batter_bbe_results AS (
+                    SELECT batter_id, COUNT(*) AS bbe_count
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_avg_ev_results AS (
+                    SELECT batter_id, AVG(exit_velocity) AS avg_ev_value
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_max_ev_results AS (
+                    SELECT batter_id, MAX(exit_velocity) AS max_ev_value
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_avg_la_results AS (
+                    SELECT batter_id, AVG(launch_angle) AS avg_la_value
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+
+                batter_brl_results AS (
+                    SELECT batter_id, SUM(barrel_count) AS brls_count
+                    FROM (
+                        SELECT 
+                            batter_id, 
+                            CASE 
+                                WHEN exit_velocity >= 98.0 AND exit_velocity <= 99.0 AND launch_angle >= 26.0 AND launch_angle <= 30.0 THEN 1
+                                WHEN exit_velocity >= 98.0 AND exit_velocity <= 100.0 AND launch_angle >= 25.0 AND launch_angle <= 31.0 THEN 1
+                                WHEN exit_velocity > 100.0 THEN
+                                    CASE
+                                        WHEN launch_angle >= (MAX(25.0 - ((exit_velocity - 100.0) * 1.2), 8.0)) THEN 1
+                                        WHEN launch_angle <= (MIN(31.0 + ((exit_velocity - 100.0) * 1.2), 50.0)) THEN 1
+                                        ELSE 0
+                                    END
+                                ELSE 0
+                            END AS barrel_count
+                        FROM trackman
+                        WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts AND batter_id = b_id
+                    ) AS barrels
+                    GROUP BY batter_id
+                ),
+                          
+                batter_hh_results AS (
+                    SELECT batter_id, COUNT(*) AS hh_count
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ts
+                    AND batter_id = b_id
+                    GROUP BY batter_id
+                ),
+                batter_hh_rate_results AS (
+                    SELECT batter_id, hh_count / bbe_count AS hh_rate_value
+                    FROM (
+                        SELECT 
+                            s.batter_id, 
+                            s.bbe AS bbe_count,
+                            h.hh_count
+                        FROM batting_stats_statcast s
+                        LEFT JOIN batter_hh_results h ON s.batter_id = h.batter_id
+                        WHERE (s.last_updated + 43200) > ts
+                    )
+                )
+                          
+            UPDATE batting_stats_statcast
+            SET bbe = (SELECT bbe_count FROM batter_bbe_results WHERE batter_id = b_id),
+                avg_ev = (SELECT avg_ev_value FROM batter_avg_ev_results WHERE batter_id = b_id),
+                max_ev = (SELECT max_ev_value FROM batter_max_ev_results WHERE batter_id = b_id),
+                avg_la = (SELECT avg_la_value FROM batter_avg_la_results WHERE batter_id = b_id),
+                brls = (SELECT brls_count FROM batter_barrel_results WHERE batter_id = b_id),
+                hh = (SELECT hh_count FROM batter_hh_results WHERE batter_id = b_id),
+                hh_rate = (SELECT hh_rate_value FROM batter_hh_rate_results WHERE batter_id = b_id)
+            WHERE batter_id = b_id;
+                          
+            DELETE FROM batting_stats_advanced WHERE batter_id = b_id;
+            INSERT INTO batting_stats_advanced (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id, l_id, d_id, t_id, yr, ts);
+
+            WITH 
+                batter_avg_results AS (
+                    SELECT batter_id, ab, h
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_obp_results AS (
+                    SELECT batter_id, pa, h, bb, hbp
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_slg_results AS (
+                    SELECT batter_id, ab, tb
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_ops_results AS (
+                    SELECT batter_id, slg, obp
+                    FROM batting_stats_advanced
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_iso_results AS (
+                    SELECT batter_id, avg, slg
+                    FROM batting_stats_advanced
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_babip_results AS (
+                    SELECT batter_id, COUNT(*) AS batted_ball_events, COUNT(CASE WHEN result_id <= 4 THEN 1 END) AS hits
+                    FROM trackman
+                    WHERE call_id = 4 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_bb_rate_results AS (
+                    SELECT batter_id, pa, bb
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_so_rate_results AS (
+                    SELECT batter_id, pa, so
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                ),
+                batter_bb_k_results AS (
+                    SELECT batter_id, so, bb
+                    FROM batting_stats_standard
+                    WHERE (last_updated + 43200) > ts
+                )
+            
+            UPDATE batting_stats_advanced
+            SET avg = (SELECT h / ab FROM batter_avg_results WHERE batter_id = b_id),
+                obp = (SELECT (h + bb + hbp) / pa FROM batter_obp_results WHERE batter_id = b_id),
+                slg = (SELECT tb / ab FROM batter_slg_results WHERE batter_id = b_id),
+                ops = (SELECT slg + obp FROM batter_ops_results WHERE batter_id = b_id),
+                iso = (SELECT slg - avg FROM batter_iso_results WHERE batter_id = b_id),
+                babip = (SELECT hits / batted_ball_events FROM batter_babip_results WHERE batter_id = b_id),
+                bb_rate = (SELECT bb / pa FROM batter_bb_rate_results WHERE batter_id = b_id),
+                k_rate = (SELECT so / pa FROM batter_so_rate_results WHERE batter_id = b_id),
+                bb_k = (SELECT bb / so FROM batter_bb_k_results WHERE batter_id = b_id)
+            WHERE batter_id = b_id;
+
+            DELETE FROM batting_stats_batted_ball WHERE batter_id = b_id;
+            INSERT INTO batting_stats_batted_ball (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id, l_id, d_id, t_id, yr, ts);
+
+            WITH 
+                batter_bbe_results AS (
+                    SELECT batter_id, COUNT(*) AS bbe
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_gb_rate_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) AS gb_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_fb_rate_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) AS fb_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_ld_rate_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) AS ld_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_iffb_rate_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) AS iffb_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_hr_fb_results AS (
+                    SELECT batter_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) AS fb_events, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) AS hr_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_pull_rate_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS pull_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),
+                batter_cent_rate_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END) AS cent_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_oppo_rate_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS oppo_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),
+                batter_pull_gb_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS pull_gb_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),
+                batter_cent_gb_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END) AS cent_gb_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_oppo_gb_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS oppo_gb_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),    
+                batter_pull_fb_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS pull_fb_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),
+                batter_cent_fb_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END) AS cent_fb_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_oppo_fb_results AS (
+                    SELECT trackman.batter_id, COUNT(*), COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+                    (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+                    (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END) AS oppo_fb_events
+                    FROM trackman
+                    LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    LEFT JOIN batters ON trackman.batter_id = batters.batter_id
+                    WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ts
+                    GROUP BY trackman.batter_id
+                ),
+                batter_soft_con_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) AS soft_con_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_med_con_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) AS med_con_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                ),
+                batter_hard_con_results AS (
+                    SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) AS hard_con_events
+                    FROM trackman
+                    WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ts
+                    GROUP BY batter_id
+                )
+            
+            UPDATE batting_stats_batted_ball
+            SET bbe = (SELECT bbe FROM batter_bbe_results WHERE batter_id = b_id),
+                gb_rate = (SELECT gb_events / bbe FROM batter_gb_rate_results WHERE batter_id = b_id),
+                fb_rate = (SELECT fb_events / bbe FROM batter_fb_rate_results WHERE batter_id = b_id),
+                ld_rate = (SELECT ld_events / bbe FROM batter_ld_rate_results WHERE batter_id = b_id),
+                iffb_rate = (SELECT iffb_events / bbe FROM batter_iffb_rate_results WHERE batter_id = b_id),
+                hr_fb = (SELECT hr_events / fb_events FROM batter_hr_fb_results WHERE batter_id = b_id),
+                pull_rate = (SELECT pull_events / bbe FROM batter_pull_rate_results WHERE batter_id = b_id),
+                cent_rate = (SELECT cent_events / bbe FROM batter_cent_rate_results WHERE batter_id = b_id),
+                oppo_rate = (SELECT oppo_events / bbe FROM batter_oppo_rate_results WHERE batter_id = b_id),
+                pull_gb_rate = (SELECT pull_gb_events / gb_events FROM batter_pull_gb_results WHERE batter_id = b_id),
+                cent_gb_rate = (SELECT cent_gb_events / gb_events FROM batter_cent_gb_results WHERE batter_id = b_id),
+                oppo_gb_rate = (SELECT oppo_gb_events / gb_events FROM batter_oppo_gb_results WHERE batter_id = b_id),
+                pull_fb_rate = (SELECT pull_fb_events / fb_events FROM batter_pull_fb_results WHERE batter_id = b_id),
+                cent_fb_rate = (SELECT cent_fb_events / fb_events FROM batter_cent_fb_results WHERE batter_id = b_id),
+                oppo_fb_rate = (SELECT oppo_fb_events / fb_events FROM batter_oppo_fb_results WHERE batter_id = b_id),
+                soft_con_rate = (SELECT soft_con_events / bbe FROM batter_soft_con_results WHERE batter_id = b_id),
+                med_con_rate = (SELECT med_con_events / bbe FROM batter_med_con_results WHERE batter_id = b_id),
+                hard_con_rate = (SELECT hard_con_events / bbe FROM batter_hard_con_results WHERE batter_id = b_id)
+            WHERE batter_id = b_id;
+                          
+            DELETE FROM batting_stats_discipline WHERE batter_id = b_id;
+            INSERT INTO batting_stats_discipline (batter_id, o_swing, z_swing, swing_rate, o_contact, z_contact, contact_rate, zone_rate)
+            SELECT batter_id,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS o_swing,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS z_swing,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS swing_rate,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS o_contact,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS z_contact,
+                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS contact_rate,
+                SUM(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 ELSE 0 END) / COUNT(*) AS zone_rate
+            FROM trackman
+            WHERE (upload_timestamp + 43200) > ts AND batter_id = b_id
+            GROUP BY batter_id;
+
         END;''')
 
         # Standard

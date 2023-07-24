@@ -1548,10 +1548,10 @@ class Game:
         cur = conn.cursor()
 
         cur.execute("SELECT game_id FROM games WHERE trackman_id = ?", (self.trackman_id,))
-        game_id = cur.fetchone()
+        game_id = cur.fetchone()[0]
 
-        cur.execute("DELETE FROM games WHERE game_id = 346", (game_id,))
-        cur.execute("DELETE FROM trackman WHERE game_id = 346", (game_id,))
+        cur.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
+        cur.execute("DELETE FROM trackman WHERE game_id = ?", (game_id,))
         
         print('Game deleted from database!')
         conn.commit()
@@ -1563,6 +1563,9 @@ class Game:
 
         conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
+
+        #NEXT MOVE IS TO PULL OUT THE DATA WE ARE GOING TO USE ONCE. SNAG EVERY PLAYER, PITCH, ETC AND WRITE TO A TEMPORARY TABLE
+        #DONT NEED TO LOCATE EVERY PITCH OVER AND OVER AND OVER AGAIN.
 
         #Hitters 
 

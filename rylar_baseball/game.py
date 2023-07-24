@@ -32,9 +32,9 @@ class Game:
         self.home = team.Team(self.data.iloc[0]['HomeTeam'])
         self.away = team.Team(self.data.iloc[0]['AwayTeam'])
         self.timestamp = int(datetime.datetime.now().timestamp())
-        #if writeData:
-        #   self.toDatabase()
-        #   self.updateStats()
+        if writeData:
+            self.toDatabase()
+            self.updateStats()
 
     def loadDF(self, data, writeData = True):
         self.data = data
@@ -1542,6 +1542,21 @@ class Game:
 
         END;''')
         
+    def removeGame(self):
+
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+
+        cur.execute("SELECT game_id FROM games WHERE trackman_id = ?", (self.trackman_id,))
+        game_id = cur.fetchone()
+
+        cur.execute("DELETE FROM games WHERE game_id = 346", (game_id,))
+        cur.execute("DELETE FROM trackman WHERE game_id = 346", (game_id,))
+        
+        print('Game deleted from database!')
+        conn.commit()
+        cur.close()
+
     def updateStats(self):
 
         print('...updating stats...')

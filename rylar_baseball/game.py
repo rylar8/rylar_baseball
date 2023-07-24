@@ -1489,18 +1489,8 @@ class Game:
             WHERE batter_id = b_id;
                           
             DELETE FROM batting_stats_discipline WHERE batter_id = b_id;
-            INSERT INTO batting_stats_discipline (batter_id, o_swing, z_swing, swing_rate, o_contact, z_contact, contact_rate, zone_rate)
-            SELECT batter_id,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS o_swing,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS z_swing,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS swing_rate,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS o_contact,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS z_contact,
-                SUM(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 ELSE 0 END) / COUNT(*) AS contact_rate,
-                SUM(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 ELSE 0 END) / COUNT(*) AS zone_rate
-            FROM trackman
-            WHERE (upload_timestamp + 43200) > ts AND batter_id = b_id
-            GROUP BY batter_id;
+            INSERT INTO batting_stats_batted_ball (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (b_id, l_id, d_id, t_id, yr, ts);
+            
 
         END;''')
 

@@ -1566,6 +1566,7 @@ class Game:
 
         #NEXT MOVE IS TO PULL OUT THE DATA WE ARE GOING TO USE ONCE. SNAG EVERY PLAYER, PITCH, ETC AND WRITE TO A TEMPORARY TABLE
         #DONT NEED TO LOCATE EVERY PITCH OVER AND OVER AND OVER AGAIN.
+        #SHOULD WE JUST USE GAME ID INSTEAD OF TIMESTAMP? IF FAST ENOUGH THEN JUST UPDATE STATS EVERY TIME A GAME GETS WRITTEN. 
 
         #Hitters 
 
@@ -1583,6 +1584,11 @@ class Game:
         tupIDs = [tup + (self.timestamp,) for tup in cur.fetchall()]
         batterIDs = [tup[0] for tup in tupIDs]
 
+        cur.execute("DROP TABLE IF EXISTS temp_trackman")
+        cur.execute('''CREATE TEMPORARY TABLE temp_trackman AS
+                    SELECT * FROM trackman
+                    WHERE batter_id IN ({})'''.format(','.join('?' for _ in batterIDs)), tuple(batterIDs))
+
         #Clear standard table of recent players if they are already listed
         cur.executemany('DELETE FROM batting_stats_standard WHERE batter_id = ?', [(id,) for id in batterIDs])
         
@@ -1590,75 +1596,75 @@ class Game:
         cur.executemany('INSERT INTO batting_stats_standard (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
         
         #Get games by batter id
-        cur.execute('SELECT batter_id, COUNT(DISTINCT game_id) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(DISTINCT game_id) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         gByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET g = ? WHERE batter_id = ?', ([(gByID.get(id, 0), id) for id in batterIDs]))
 
         #Get at bats by batter id (chat gpt helped with the partition and row_number, but it looks like it works with a couple fixes!)
         cur.execute('''SELECT batter_id, COUNT(*)
-                    FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY batter_id, game_id, inning, pa_of_inning ORDER BY pitch_num DESC) AS row_num FROM trackman)
+                    FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY batter_id, game_id, inning, pa_of_inning ORDER BY pitch_num DESC) AS row_num FROM temp_trackman)
                     WHERE (row_num = 1) AND (k_or_bb_id != ?) AND (result_id != ?) AND (call_id != ?) AND (upload_timestamp + 43200) > ?
                     GROUP BY batter_id''', ('3', '7', '6', self.timestamp))
         abByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET ab = ? WHERE batter_id = ?', ([(abByID.get(id, 0), id) for id in batterIDs]))
 
         #Get plate appearances by batter id
-        cur.execute('SELECT batter_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         paByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET pa = ? WHERE batter_id = ?', ([(paByID.get(id, 0), id) for id in batterIDs]))
 
         #Get hits by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         hByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET h = ? WHERE batter_id = ?', ([(hByID.get(id, 0), id) for id in batterIDs]))
 
         #Get doubles by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE result_id = 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE result_id = 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         _2bByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET _2b = ? WHERE batter_id = ?', ([(_2bByID.get(id, 0), id) for id in batterIDs]))
 
         #Get triples by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE result_id = 3 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE result_id = 3 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         _3bByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET _3b = ? WHERE batter_id = ?', ([(_3bByID.get(id, 0), id) for id in batterIDs]))
 
         #Get homers by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         hrByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET hr = ? WHERE batter_id = ?', ([(hrByID.get(id, 0), id) for id in batterIDs]))
 
         #Get rbis by batter id
-        cur.execute('SELECT batter_id, SUM(runs_scored) FROM trackman WHERE runs_scored >= 1 AND outs_made < 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, SUM(runs_scored) FROM temp_trackman WHERE runs_scored >= 1 AND outs_made < 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         rbiByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET rbi = ? WHERE batter_id = ?', ([(rbiByID.get(id, 0), id) for id in batterIDs]))
 
         #Get walks by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 3 AND call_id != 9 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE k_or_bb_id = 3 AND call_id != 9 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         bbByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET bb = ? WHERE batter_id = ?', ([(bbByID.get(id, 0), id) for id in batterIDs]))
 
         #Get intentional walks by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 3 AND call_id = 9 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE k_or_bb_id = 3 AND call_id = 9 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         ibbByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET ibb = ? WHERE batter_id = ?', ([(ibbByID.get(id, 0), id) for id in batterIDs]))
 
         #Get strikeouts by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE k_or_bb_id = 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE k_or_bb_id = 2 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         soByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET so = ? WHERE batter_id = ?', ([(soByID.get(id, 0), id) for id in batterIDs]))
 
         #Get hit by pitch by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 6 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE call_id = 6 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         hbpByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET hbp = ? WHERE batter_id = ?', ([(hbpByID.get(id, 0), id) for id in batterIDs]))
 
         #Get sacrifices by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE result_id = 7 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE result_id = 7 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         sacByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET sac = ? WHERE batter_id = ?', ([(sacByID.get(id, 0), id) for id in batterIDs]))
 
         #Get grounded into double plays by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE outs_made >= 2 AND hit_type_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE outs_made >= 2 AND hit_type_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         gdpByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_standard SET gdp = ? WHERE batter_id = ?', ([(gdpByID.get(id, 0), id) for id in batterIDs]))
 
@@ -1677,27 +1683,27 @@ class Game:
         cur.executemany('INSERT INTO batting_stats_statcast (batter_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
 
         #Get every batted ball event by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         bbeByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET bbe = ? WHERE batter_id = ?', ([(bbeByID.get(id, 0), id) for id in batterIDs]))
 
         #Get average exit velo by batter id
-        cur.execute('SELECT batter_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, AVG(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         avg_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET avg_ev = ? WHERE batter_id = ?', ([(avg_evByID.get(id, None), id) for id in batterIDs]))
 
         #Get max exit velo by batter id
-        cur.execute('SELECT batter_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, MAX(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         max_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET max_ev = ? WHERE batter_id = ?', ([(max_evByID.get(id, None), id) for id in batterIDs]))
 
         #Get average launch angle by batter id
-        cur.execute('SELECT batter_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, AVG(launch_angle) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         avg_laByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET avg_la = ? WHERE batter_id = ?', ([(avg_laByID.get(id, None), id) for id in batterIDs]))
 
         #Get barrels by batter id (probably need a league specific definition of barrel) 
-        cur.execute('SELECT batter_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? ', (self.timestamp,))
+        cur.execute('SELECT batter_id, exit_velocity, launch_angle FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? ', (self.timestamp,))
         tupsByID = cur.fetchall()
 
         brlsByID = Counter()
@@ -1732,7 +1738,7 @@ class Game:
         cur.executemany('UPDATE batting_stats_statcast SET brl_rate = ? WHERE batter_id = ?', ([(brl_rateByID.get(id, None), id) for id in batterIDs]))
         
         #Get hard hits by batter id
-        cur.execute('SELECT batter_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         hhByID = dict(cur.fetchall())
         cur.executemany('UPDATE batting_stats_statcast SET hh = ? WHERE batter_id = ?', ([(hhByID.get(id, 0), id) for id in batterIDs]))
         
@@ -1781,7 +1787,7 @@ class Game:
         cur.executemany('UPDATE batting_stats_advanced SET iso = ? WHERE batter_id = ?', ([(isoByID.get(id, 0), id) for id in batterIDs]))
         
         #Get babip by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         babipByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_advanced SET babip = ? WHERE batter_id = ?', ([(babipByID.get(id, None), id) for id in batterIDs]))
@@ -1816,44 +1822,44 @@ class Game:
         cur.executemany('UPDATE batting_stats_batted_ball SET bbe = ? WHERE batter_id = ?', ([(bbeByID.get(id, 0), id) for id in batterIDs]))
 
         #Get every ground ball rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         gb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET gb_rate = ? WHERE batter_id = ?', ([(gb_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every fly ball rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         fb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET fb_rate = ? WHERE batter_id = ?', ([(fb_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every line drive rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         ld_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET ld_rate = ? WHERE batter_id = ?', ([(ld_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every infield fly ball rate rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         iffb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET iffb_rate = ? WHERE batter_id = ?', ([(iffb_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every home run per fly ball rate by batter id
-        cur.execute('SELECT batter_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         hr_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET hr_fb = ? WHERE batter_id = ?', ([(hr_fbByID.get(id, None), id) for id in batterIDs]))
 
         #Get every pull rate by batter id
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET pull_rate = ? WHERE batter_id = ?', ([(pull_rateByID.get(id, None), id) for id in batterIDs]))
@@ -1861,34 +1867,34 @@ class Game:
         #Get every center rate by batter id
         cur.execute('''SELECT batter_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET cent_rate = ? WHERE batter_id = ?', ([(cent_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every oppo rate by batter id
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET oppo_rate = ? WHERE batter_id = ?', ([(oppo_rateByID.get(id, None), id) for id in batterIDs]))
 
         #Get every pull per gb rate by batter id
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET pull_gb_rate = ? WHERE batter_id = ?', ([(pull_gbByID.get(id, None), id) for id in batterIDs]))
@@ -1896,34 +1902,34 @@ class Game:
         #Get every center per gb rate by batter id
         cur.execute('''SELECT batter_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET cent_gb_rate = ? WHERE batter_id = ?', ([(cent_gbByID.get(id, None), id) for id in batterIDs]))
 
         #Get every oppo per gb rate by batter id
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET oppo_gb_rate = ? WHERE batter_id = ?', ([(oppo_gbByID.get(id, None), id) for id in batterIDs]))
 
         #Get every pull per fb rate by batter id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET pull_fb_rate = ? WHERE batter_id = ?', ([(pull_fbByID.get(id, None), id) for id in batterIDs]))
@@ -1931,39 +1937,39 @@ class Game:
         #Get every center per fb rate by batter id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
         cur.execute('''SELECT batter_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET cent_fb_rate = ? WHERE batter_id = ?', ([(cent_fbByID.get(id, None), id) for id in batterIDs]))
 
         #Get every oppo per fb rate by batter id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT trackman.batter_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.batter_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.batter_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.batter_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET oppo_fb_rate = ? WHERE batter_id = ?', ([(oppo_fbByID.get(id, None), id) for id in batterIDs]))
 
         #Get soft con rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         soft_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET soft_con_rate = ? WHERE batter_id = ?', ([(soft_conbyID.get(id, None), id) for id in batterIDs]))
 
         #Get med con rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         med_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET med_con_rate = ? WHERE batter_id = ?', ([(med_conbyID.get(id, None), id) for id in batterIDs]))
 
         #Get hard con rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         hard_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_batted_ball SET hard_con_rate = ? WHERE batter_id = ?', ([(hard_conbyID.get(id, None), id) for id in batterIDs]))
@@ -1978,47 +1984,47 @@ class Game:
         
         #Get outside of zone swing rate by batter id
         #Get balls based on universal strike zone
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND (location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033) GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND (location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033) GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         o_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET o_swing = ? WHERE batter_id = ?', ([(o_swingbyID.get(id, None), id) for id in batterIDs]))
 
         #Get inside of zone swing rate by batter id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         z_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET z_swing = ? WHERE batter_id = ?', ([(z_swingbyID.get(id, None), id) for id in batterIDs]))
 
         #Get swing rate by batter id
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         swing_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET swing_rate = ? WHERE batter_id = ?', ([(swing_ratebyID.get(id, None), id) for id in batterIDs]))
   
         #Get outside of zone contact rate by batter id
         #Get balls based on universal strike zone
-        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         o_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET o_contact = ? WHERE batter_id = ?', ([(o_contactbyID.get(id, None), id) for id in batterIDs]))
 
         #Get inside of zone contact rate by batter id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         z_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET z_contact = ? WHERE batter_id = ?', ([(z_contactbyID.get(id, None), id) for id in batterIDs]))
 
         #Get contact rate by batter id
-        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         contact_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET contact_rate = ? WHERE batter_id = ?', ([(contact_ratebyID.get(id, None), id) for id in batterIDs]))
 
         #Get inside of zone rate by batter id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
+        cur.execute('SELECT batter_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY batter_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         zone_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE batting_stats_discipline SET zone_rate = ? WHERE batter_id = ?', ([(zone_ratebyID.get(id, None), id) for id in batterIDs]))
@@ -2034,14 +2040,19 @@ class Game:
         #Standard
 
         #Get player_ids for filling null values and insert every id into the table
-        cur.execute('''SELECT trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year trackman
-                    FROM trackman
-                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        cur.execute('''SELECT temp_trackman.pitcher_id, temp_trackman.league_id, temp_trackman.division_id, pitchers.team_id, teams.year temp_trackman
+                    FROM temp_trackman
+                    JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
                     JOIN teams ON pitchers.team_id = teams.team_id
-                    WHERE (trackman.upload_timestamp + 43200) > ?
-                    GROUP BY trackman.pitcher_id, teams.year''', (self.timestamp,))
+                    WHERE (temp_trackman.upload_timestamp + 43200) > ?
+                    GROUP BY temp_trackman.pitcher_id, teams.year''', (self.timestamp,))
         tupIDs = [tup + (self.timestamp,) for tup in cur.fetchall()]
         pitcherIDs = [tup[0] for tup in tupIDs]
+
+        cur.execute("DROP TABLE IF EXISTS temp_trackman")
+        cur.execute('''CREATE TEMPORARY TABLE temp_trackman AS
+                    SELECT * FROM trackman
+                    WHERE pitcher_id IN ({})'''.format(','.join('?' for _ in pitcherIDs)), tuple(pitcherIDs))
 
         #Clear standard table of recent players if they are already listed
         cur.executemany('DELETE FROM pitching_stats_standard WHERE pitcher_id = ?', [(id,) for id in pitcherIDs])
@@ -2050,72 +2061,72 @@ class Game:
         cur.executemany('INSERT INTO pitching_stats_standard (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
 
         #Get games by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(DISTINCT game_id) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT game_id) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         gByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET g = ? WHERE pitcher_id = ?', ([(gByID.get(id, 0), id) for id in pitcherIDs]))
 
         #Get games started by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND inning = 1 AND pa_of_inning = 1 AND pitch_of_pa = 1 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND inning = 1 AND pa_of_inning = 1 AND pitch_of_pa = 1 GROUP BY pitcher_id', (self.timestamp,))
         gsByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET gs = ? WHERE pitcher_id = ?', ([(gsByID.get(id, 0), id) for id in pitcherIDs]))
  
         #Get complete games by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1', (self.timestamp,))
         cgByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET cg = ? WHERE pitcher_id = ?', ([(cgByID.get(id, 0), id) for id in pitcherIDs]))
  
         #Get shutouts by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1 AND SUM(runs_scored) = 0', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY game_id, top_bottom_id HAVING COUNT(DISTINCT pitcher_id) = 1 AND SUM(runs_scored) = 0', (self.timestamp,))
         shoByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET sho = ? WHERE pitcher_id = ?', ([(shoByID.get(id, 0), id) for id in pitcherIDs]))
  
         #Get innings pitched by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman WHERE (result_id = ? OR k_or_bb_id = ?) AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (6,2,self.timestamp))
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM temp_trackman WHERE (result_id = ? OR k_or_bb_id = ?) AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (6,2,self.timestamp))
         ipByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET ip = ? WHERE pitcher_id = ?', ([((ipByID.get(id, 0) / 3), id) for id in pitcherIDs]))
  
         #Get total batters faced by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(DISTINCT (game_id || inning || pa_of_inning)) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tbfByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET tbf = ? WHERE pitcher_id = ?', ([(tbfByID.get(id, 0), id) for id in pitcherIDs]))
 
         #Get hits by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND result_id <= 4 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND result_id <= 4 GROUP BY pitcher_id', (self.timestamp,))
         hByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET h = ? WHERE pitcher_id = ?', ([(hByID.get(id, 0), id) for id in pitcherIDs]))
  
         #Get runs by pitcher id
-        cur.execute('SELECT pitcher_id, SUM(runs_scored) FROM trackman WHERE (upload_timestamp + 43200) > ? AND result_id <= 4 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, SUM(runs_scored) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND result_id <= 4 GROUP BY pitcher_id', (self.timestamp,))
         rByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET r = ? WHERE pitcher_id = ?', ([(rByID.get(id, 0), id) for id in pitcherIDs]))
  
         #Get home runs by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND result_id = 4 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND result_id = 4 GROUP BY pitcher_id', (self.timestamp,))
         hrByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET hr = ? WHERE pitcher_id = ?', ([(hrByID.get(id, 0), id) for id in pitcherIDs]))
 
         #Get walks by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 3 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 3 GROUP BY pitcher_id', (self.timestamp,))
         bbByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET bb = ? WHERE pitcher_id = ?', ([(bbByID.get(id, 0), id) for id in pitcherIDs]))
 
         #Get intentional walks by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 3 AND call_id = 9 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 3 AND call_id = 9 GROUP BY pitcher_id', (self.timestamp,))
         ibbByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET ibb = ? WHERE pitcher_id = ?', ([(ibbByID.get(id, 0), id) for id in pitcherIDs]))
   
         #Get hit by pitch by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 6 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 6 GROUP BY pitcher_id', (self.timestamp,))
         hbpByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET hbp = ? WHERE pitcher_id = ?', ([(hbpByID.get(id, 0), id) for id in pitcherIDs]))
   
         #Get strikeouts by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 2 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND k_or_bb_id = 2 GROUP BY pitcher_id', (self.timestamp,))
         soByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET so = ? WHERE pitcher_id = ?', ([(soByID.get(id, 0), id) for id in pitcherIDs]))
   
         #Get grounded into double plays by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND outs_made >= 2 AND hit_type_id = 4 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND outs_made >= 2 AND hit_type_id = 4 GROUP BY pitcher_id', (self.timestamp,))
         gdpByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_standard SET gdp = ? WHERE pitcher_id = ?', ([(gdpByID.get(id, 0), id) for id in pitcherIDs]))
         
@@ -2128,27 +2139,27 @@ class Game:
         cur.executemany('INSERT INTO pitching_stats_statcast (pitcher_id, league_id, division_id, team_id, year, last_updated) VALUES (?,?,?,?,?,?)', (tupIDs))
 
         #Get every batted ball event by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
         bbeByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_statcast SET bbe = ? WHERE pitcher_id = ?', ([(bbeByID.get(id, 0), id) for id in pitcherIDs]))
    
         #Get average exit velo by pitcher id
-        cur.execute('SELECT pitcher_id, AVG(exit_velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, AVG(exit_velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
         avg_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_statcast SET avg_ev = ? WHERE pitcher_id = ?', ([(avg_evByID.get(id, None), id) for id in pitcherIDs]))
    
         #Get max exit velo by pitcher id
-        cur.execute('SELECT pitcher_id, MAX(exit_velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, MAX(exit_velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
         max_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_statcast SET max_ev = ? WHERE pitcher_id = ?', ([(max_evByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get average launch angle by pitcher id
-        cur.execute('SELECT pitcher_id, AVG(launch_angle) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, AVG(launch_angle) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0 GROUP BY pitcher_id', (self.timestamp,))
         avg_laByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_statcast SET avg_la = ? WHERE pitcher_id = ?', ([(avg_laByID.get(id, None), id) for id in pitcherIDs]))
  
         #Get barrels by pitcher id (probably need a league specific definition of barrel) 
-        cur.execute('SELECT pitcher_id, exit_velocity, launch_angle FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, exit_velocity, launch_angle FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity > 0', (self.timestamp,))
         tupsByID = cur.fetchall()
 
         brlsByID = Counter()
@@ -2183,7 +2194,7 @@ class Game:
         cur.executemany('UPDATE pitching_stats_statcast SET brl_rate = ? WHERE pitcher_id = ?', ([(brl_rateByID.get(id, None), id) for id in pitcherIDs]))
         
         #Get hard hits by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity >= 95 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND call_id = 4 AND exit_velocity >= 95 GROUP BY pitcher_id', (self.timestamp,))
         hhByID = dict(cur.fetchall())
         cur.executemany('UPDATE pitching_stats_statcast SET hh = ? WHERE pitcher_id = ?', ([(hhByID.get(id, 0), id) for id in pitcherIDs]))
         
@@ -2250,7 +2261,7 @@ class Game:
         cur.executemany('UPDATE pitching_stats_advanced SET whip = ? WHERE pitcher_id = ?', ([(whipByID.get(id, None), id) for id in pitcherIDs]))
  
         #Get babip by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         babipByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_advanced SET babip = ? WHERE pitcher_id = ?', ([(babipByID.get(id, None), id) for id in pitcherIDs]))
@@ -2267,56 +2278,56 @@ class Game:
         cur.executemany('UPDATE pitching_stats_batted_ball SET bbe = ? WHERE pitcher_id = ?', ([(bbeByID.get(id, 0), id) for id in pitcherIDs]))
         
         #Get every ground ball rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         gb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET gb_rate = ? WHERE pitcher_id = ?', ([(gb_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every fly ball rate by pitcher id 
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         fb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET fb_rate = ? WHERE pitcher_id = ?', ([(fb_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every line drive rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         ld_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET ld_rate = ? WHERE pitcher_id = ?', ([(ld_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every infield fly ball rate rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         iffb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET iffb_rate = ? WHERE pitcher_id = ?', ([(iffb_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every home run per fly ball rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         hr_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET hr_fb = ? WHERE pitcher_id = ?', ([(hr_fbByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every strike rate rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         strike_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET strike_rate = ? WHERE pitcher_id = ?', ([(strike_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every ball rate rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         ball_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET ball_rate = ? WHERE pitcher_id = ?', ([(ball_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every pull rate by pitcher id
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET pull_rate = ? WHERE pitcher_id = ?', ([(pull_rateByID.get(id, None), id) for id in pitcherIDs]))
@@ -2324,34 +2335,34 @@ class Game:
         #Get every center rate by pitcher id
         cur.execute('''SELECT pitcher_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET cent_rate = ? WHERE pitcher_id = ?', ([(cent_rateByID.get(id, None), id) for id in pitcherIDs]))
  
         #Get every oppo rate by pitcher id
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET oppo_rate = ? WHERE pitcher_id = ?', ([(oppo_rateByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every pull per gb rate by pitcher id 
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET pull_gb_rate = ? WHERE pitcher_id = ?', ([(pull_gbByID.get(id, None), id) for id in pitcherIDs]))
@@ -2359,34 +2370,34 @@ class Game:
         #Get every center per gb rate by pitcher id
         cur.execute('''SELECT pitcher_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET cent_gb_rate = ? WHERE pitcher_id = ?', ([(cent_gbByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every oppo per gb rate by pitcher id
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET oppo_gb_rate = ? WHERE pitcher_id = ?', ([(oppo_gbByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every pull per fb rate by pitcher id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         pull_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET pull_fb_rate = ? WHERE pitcher_id = ?', ([(pull_fbByID.get(id, None), id) for id in pitcherIDs]))
@@ -2394,39 +2405,39 @@ class Game:
         #Get every center per fb rate by pitcher id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
         cur.execute('''SELECT pitcher_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
+        FROM temp_trackman
         WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         cent_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET cent_fb_rate = ? WHERE pitcher_id = ?', ([(cent_fbByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get every oppo per fb rate by pitcher id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT trackman.pitcher_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY trackman.pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT temp_trackman.pitcher_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY temp_trackman.pitcher_id''', (self.timestamp,))
         tupsByID = cur.fetchall()
         oppo_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET oppo_fb_rate = ? WHERE pitcher_id = ?', ([(oppo_fbByID.get(id, None), id) for id in pitcherIDs]))
 
         #Get soft con rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         soft_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET soft_con_rate = ? WHERE pitcher_id = ?', ([(soft_conbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get med con rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         med_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET med_con_rate = ? WHERE pitcher_id = ?', ([(med_conbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get hard con rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         hard_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_batted_ball SET hard_con_rate = ? WHERE pitcher_id = ?', ([(hard_conbyID.get(id, None), id) for id in pitcherIDs]))
@@ -2441,47 +2452,47 @@ class Game:
 
         #Get outside of zone swing rate by pitcher id
         #Get balls based on universal strike zone
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         o_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET o_swing = ? WHERE pitcher_id = ?', ([(o_swingbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get inside of zone swing rate by pitcher id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         z_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET z_swing = ? WHERE pitcher_id = ?', ([(z_swingbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get swing rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         swing_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET swing_rate = ? WHERE pitcher_id = ?', ([(swing_ratebyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get outside of zone contact rate by pitcher id
         #Get balls based on universal strike zone
-        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         o_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET o_contact = ? WHERE pitcher_id = ?', ([(o_contactbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get inside of zone contact rate by pitcher id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? AND location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         z_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET z_contact = ? WHERE pitcher_id = ?', ([(z_contactbyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get contact rate by pitcher id
-        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         contact_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET contact_rate = ? WHERE pitcher_id = ?', ([(contact_ratebyID.get(id, None), id) for id in pitcherIDs]))
 
         #Get inside of zone rate by pitcher id
         #Get strikes based on universal strike zone
-        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
+        cur.execute('SELECT pitcher_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id', (self.timestamp,))
         tupsByID = cur.fetchall()
         zone_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE pitching_stats_discipline SET zone_rate = ? WHERE pitcher_id = ?', ([(zone_ratebyID.get(id, None), id) for id in pitcherIDs]))
@@ -2496,22 +2507,22 @@ class Game:
         # Standard
 
         #Get pitch ids from tagged pitch types for filling null values and insert every id into the table
-        cur.execute('''SELECT DISTINCT '1' || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, 
-                    trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year, trackman.tagged_type_id
-                    FROM trackman
-                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+        cur.execute('''SELECT DISTINCT '1' || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, 
+                    temp_trackman.pitcher_id, temp_trackman.league_id, temp_trackman.division_id, pitchers.team_id, teams.year, temp_trackman.tagged_type_id
+                    FROM temp_trackman
+                    JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
                     JOIN teams ON pitchers.team_id = teams.team_id
-                    WHERE (trackman.upload_timestamp + 43200) > ?
+                    WHERE (temp_trackman.upload_timestamp + 43200) > ?
                     GROUP BY tagged_pitch_id
 
                     UNION
 
-                    SELECT DISTINCT '2' || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id,
-                    trackman.pitcher_id, trackman.league_id, trackman.division_id, pitchers.team_id, teams.year, trackman.auto_type_id 
-                    FROM trackman
-                    JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
+                    SELECT DISTINCT '2' || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id,
+                    temp_trackman.pitcher_id, temp_trackman.league_id, temp_trackman.division_id, pitchers.team_id, teams.year, temp_trackman.auto_type_id 
+                    FROM temp_trackman
+                    JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
                     JOIN teams ON pitchers.team_id = teams.team_id
-                    WHERE (trackman.upload_timestamp + 43200) > ?
+                    WHERE (temp_trackman.upload_timestamp + 43200) > ?
                     GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupIDs = [tup + (self.timestamp,) for tup in cur.fetchall()]
         arsenalIDs = [tup[0] for tup in tupIDs]
@@ -2523,39 +2534,39 @@ class Game:
         cur.executemany('INSERT INTO arsenal_stats_standard (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
 
         #Get hits by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM temp_trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM temp_trackman WHERE result_id <= 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         hByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_standard SET h = ? WHERE pitch_id = ?', ([(hByID.get(id, 0), id) for id in arsenalIDs]))
   
         #Get home runs by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM temp_trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM temp_trackman WHERE result_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         hrByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_standard SET hr = ? WHERE pitch_id = ?', ([(hrByID.get(id, 0), id) for id in arsenalIDs]))
    
         #Get every strike rate by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         strike_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_standard SET strike_rate = ? WHERE pitch_id = ?', ([(strike_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every ball rate by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         ball_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_standard SET ball_rate = ? WHERE pitch_id = ?', ([(ball_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every number of pitches by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         npByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_standard SET np = ? WHERE pitch_id = ?', ([(npByID.get(id, 0), id) for id in arsenalIDs]))
  
         #Get every number of pitches by aresenal id
-        cur.execute('''SELECT pitcher_id, COUNT(*) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
+        cur.execute('''SELECT pitcher_id, COUNT(*) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY pitcher_id''', (self.timestamp,))
         pitcher_npByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_standard SET pitcher_np = ? WHERE pitcher_id = ?', ([(pitcher_npByID.get(id, 0), id) for id in pitcherIDs]))
         
@@ -2578,8 +2589,8 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_standard SET hr_np = ? WHERE pitch_id = ?', ([(hr_npByID.get(id, 0), id) for id in arsenalIDs]))
         
         #Get runs by arsenal id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, SUM(runs_scored) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, SUM(runs_scored) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, SUM(runs_scored) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, SUM(runs_scored) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         rByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_standard SET r = ? WHERE pitch_id = ?', ([(rByID.get(id, 0), id) for id in arsenalIDs]))
         
@@ -2598,44 +2609,44 @@ class Game:
         cur.executemany('INSERT INTO arsenal_stats_info (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
 
         #Get avg velo by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_veloByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET avg_velo = ? WHERE pitch_id = ?', ([(avg_veloByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get max velo by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(velocity) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(velocity) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         max_veloByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET max_velo = ? WHERE pitch_id = ?', ([(max_veloByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get avg spin by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(spin) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(spin) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(spin) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(spin) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_spin_rateByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET avg_spin_rate = ? WHERE pitch_id = ?', ([(avg_spin_rateByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get max spin by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(spin) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(spin) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(spin) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(spin) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         max_spin_rateByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET max_spin_rate = ? WHERE pitch_id = ?', ([(max_spin_rateByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get avg vert movement by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(vertical) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(vertical) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(vertical) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(vertical) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_vert_movementByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET avg_vert_movement = ? WHERE pitch_id = ?', ([(avg_vert_movementByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get avg induced movement by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(induced) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(induced) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(induced) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(induced) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_induced_movementByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET avg_induced_movement = ? WHERE pitch_id = ?', ([(avg_induced_movementByID.get(id, 0), id) for id in arsenalIDs]))
  
         #Get avg horz movement by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(horizontal) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(horizontal) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(horizontal) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(horizontal) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_horz_movementByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_info SET avg_horz_movement = ? WHERE pitch_id = ?', ([(avg_horz_movementByID.get(id, 0), id) for id in arsenalIDs]))
         
@@ -2648,32 +2659,32 @@ class Game:
         cur.executemany('INSERT INTO arsenal_stats_statcast (pitch_id, pitcher_id, league_id, division_id, team_id, year, type_id, last_updated) VALUES (?,?,?,?,?,?,?,?)', (tupIDs))
 
         #Get avg exit velo by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_statcast SET avg_ev = ? WHERE pitch_id = ?', ([(avg_evByID.get(id, 0), id) for id in arsenalIDs]))
  
         #Get max exit velo by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(exit_velocity) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, MAX(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, MAX(exit_velocity) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         max_evByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_statcast SET max_ev = ? WHERE pitch_id = ?', ([(max_evByID.get(id, 0), id) for id in arsenalIDs]))
    
         #Get avg launch angle by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(launch_angle) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, AVG(launch_angle) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, AVG(launch_angle) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         avg_laByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_statcast SET avg_la = ? WHERE pitch_id = ?', ([(avg_laByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get every batted ball event by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         bbeByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_statcast SET bbe = ? WHERE pitch_id = ?', ([(bbeByID.get(id, 0), id) for id in arsenalIDs]))
 
         #Get barrels by pitch id (probably need a league specific definition of barrel) 
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ?
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, exit_velocity, launch_angle FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ?''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, exit_velocity, launch_angle FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ?
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, exit_velocity, launch_angle FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ?''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
 
         brlsByID = Counter()
@@ -2708,8 +2719,8 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_statcast SET brl_rate = ? WHERE pitch_id = ?', ([(brl_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get hard hits by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*) FROM temp_trackman WHERE call_id = 4 AND exit_velocity >= 95 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         hhByID = dict(cur.fetchall())
         cur.executemany('UPDATE arsenal_stats_statcast SET hh = ? WHERE pitch_id = ?', ([(hhByID.get(id, 0), id) for id in arsenalIDs]))
         
@@ -2720,8 +2731,8 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_statcast SET hh_rate = ? WHERE pitch_id = ?', ([(hh_rateByID.get(id, None), id) for id in arsenalIDs]))
         
         #Get babip by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN result_id <= 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         babipByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_statcast SET babip = ? WHERE pitch_id = ?', ([(babipByID.get(id, None), id) for id in arsenalIDs]))
@@ -2738,71 +2749,71 @@ class Game:
         cur.executemany('UPDATE arsenal_stats_batted_ball SET bbe = ? WHERE  pitch_id = ?', ([(bbeByID.get(id, 0), id) for id in arsenalIDs]))
         
         #Get every ground ball rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle <= 10 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         gb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET gb_rate = ? WHERE pitch_id = ?', ([(gb_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every fly ball rate by pitch id 
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         fb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET fb_rate = ? WHERE pitch_id = ?', ([(fb_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every line drive rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 10 AND launch_angle <=25 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         ld_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET ld_rate = ? WHERE pitch_id = ?', ([(ld_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every infield fly ball rate rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN launch_angle > 50 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         iffb_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET iffb_rate = ? WHERE pitch_id = ?', ([(iffb_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every home run per fly ball rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 THEN 1 END), COUNT(CASE WHEN launch_angle > 25 AND launch_angle <=50 AND result_id = 4 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         hr_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET hr_fb = ? WHERE pitch_id = ?', ([(hr_fbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every strike rate rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id <= 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         strike_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET strike_rate = ? WHERE pitch_id = ?', ([(strike_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every ball rate rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id >= 5 AND call_id <= 7 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         ball_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET ball_rate = ? WHERE pitch_id = ?', ([(ball_rateByID.get(id, None), id) for id in arsenalIDs]))
  
         #Get every pull rate by pitch id
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         pull_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET pull_rate = ? WHERE pitch_id = ?', ([(pull_rateByID.get(id, None), id) for id in arsenalIDs]))
@@ -2810,164 +2821,164 @@ class Game:
         #Get every center rate by pitch id
         cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
         UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         cent_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET cent_rate = ? WHERE pitch_id = ?', ([(cent_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every oppo rate by pitch id
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         oppo_rateByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET oppo_rate = ? WHERE pitch_id = ?', ([(oppo_rateByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every pull per gb rate by pitch id 
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         pull_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET pull_gb_rate = ? WHERE pitch_id = ?', ([(pull_gbByID.get(id, None), id) for id in arsenalIDs]))
  
         #Get every center per gb rate by pitch id
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle <= 10 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         cent_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET cent_gb_rate = ? WHERE pitch_id = ?', ([(cent_gbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every oppo per gb rate by pitch id
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle <= 10 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle <= 10 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         oppo_gbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET oppo_gb_rate = ? WHERE pitch_id = ?', ([(oppo_gbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every pull per fb rate by pitch id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0  AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0  AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         pull_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET pull_fb_rate = ? WHERE pitch_id = ?', ([(pull_fbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every center per fb rate by pitch id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
         COUNT(CASE WHEN hit_bearing >= -15 AND hit_bearing <= 15 THEN 1 END)
-        FROM trackman
-        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        FROM temp_trackman
+        WHERE call_id = 4 AND exit_velocity > 0 AND launch_angle > 20 AND launch_angle <=50 AND hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         cent_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET cent_fb_rate = ? WHERE pitch_id = ?', ([(cent_fbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get every oppo per fb rate by pitch id (use lower, lower bound for launch angle for purpose of stat--to be used for outfield positioning)
-        cur.execute('''SELECT "1" || trackman.pitcher_id || trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || trackman.pitcher_id || trackman.auto_type_id as auto_pitch_id, COUNT(*),
-        COUNT(CASE WHEN (trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
-        (trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
-        (trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
-        FROM trackman
-        LEFT JOIN pitchers ON trackman.pitcher_id = pitchers.pitcher_id
-        LEFT JOIN batters ON trackman.batter_id = batters.batter_id
-        WHERE trackman.call_id = 4 AND trackman.exit_velocity > 0 AND trackman.launch_angle > 20 AND trackman.launch_angle <=50 AND trackman.hit_bearing IS NOT NULL AND (trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || temp_trackman.pitcher_id || temp_trackman.tagged_type_id as tagged_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || temp_trackman.pitcher_id || temp_trackman.auto_type_id as auto_pitch_id, COUNT(*),
+        COUNT(CASE WHEN (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 1) OR (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 2) OR
+        (temp_trackman.hit_bearing < -15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 1) OR
+        (temp_trackman.hit_bearing > 15 AND batters.batter_side_id = 3 AND pitchers.pitcher_side_id = 2) THEN 1 END)
+        FROM temp_trackman
+        LEFT JOIN pitchers ON temp_trackman.pitcher_id = pitchers.pitcher_id
+        LEFT JOIN batters ON temp_trackman.batter_id = batters.batter_id
+        WHERE temp_trackman.call_id = 4 AND temp_trackman.exit_velocity > 0 AND temp_trackman.launch_angle > 20 AND temp_trackman.launch_angle <=50 AND temp_trackman.hit_bearing IS NOT NULL AND (temp_trackman.upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         oppo_fbByID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET oppo_fb_rate = ? WHERE pitch_id = ?', ([(oppo_fbByID.get(id, None), id) for id in arsenalIDs]))
 
         #Get soft con rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity < 70 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         soft_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET soft_con_rate = ? WHERE pitch_id = ?', ([(soft_conbyID.get(id, None), id) for id in arsenalIDs]))
  
         #Get med con rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 70 AND exit_velocity < 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         med_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET med_con_rate = ? WHERE pitch_id = ?', ([(med_conbyID.get(id, None), id) for id in arsenalIDs]))
   
         #Get hard con rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN exit_velocity >= 95 THEN 1 END) FROM temp_trackman WHERE call_id = 4 AND exit_velocity > 0 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         hard_conbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_batted_ball SET hard_con_rate = ? WHERE pitch_id = ?', ([(hard_conbyID.get(id, None), id) for id in arsenalIDs]))
@@ -2982,54 +2993,54 @@ class Game:
         
         #Get outside of zone swing rate by pitch id
         #Get balls based on universal strike zone
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         o_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET o_swing = ? WHERE pitch_id = ?', ([(o_swingbyID.get(id, None), id) for id in arsenalIDs]))
 
         #Get inside of zone swing rate by pitch id
         #Get strikes based on universal strike zone
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         z_swingbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET z_swing = ? WHERE pitch_id = ?', ([(z_swingbyID.get(id, None), id) for id in arsenalIDs]))
         
         #Get swing rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         swing_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET swing_rate = ? WHERE pitch_id = ?', ([(swing_ratebyID.get(id, None), id) for id in arsenalIDs]))
         
         #Get outside of zone contact rate by pitch id
         #Get balls based on universal strike zone
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side < -0.7508 OR location_side > 0.7508 OR location_height < 1.5942 OR location_height > 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         o_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET o_contact = ? WHERE pitch_id = ?', ([(o_contactbyID.get(id, None), id) for id in arsenalIDs]))
         
         #Get inside of zone contact rate by pitch id
         #Get strikes based on universal strike zone
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 AND (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         z_contactbyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET z_contact = ? WHERE pitch_id = ?', ([(z_contactbyID.get(id, None), id) for id in arsenalIDs]))
         
         #Get contact rate by pitch id
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(CASE WHEN call_id = 2 OR call_id = 3 OR call_id = 4 THEN 1 END), COUNT(CASE WHEN call_id = 3 OR call_id = 4 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         contact_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET contact_rate = ? WHERE pitch_id = ?', ([(contact_ratebyID.get(id, None), id) for id in arsenalIDs]))
 
         #Get inside of zone rate by pitch id
         #Get strikes based on universal strike zone
-        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
-        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
+        cur.execute('''SELECT "1" || pitcher_id || tagged_type_id as tagged_pitch_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY tagged_pitch_id
+        UNION SELECT "2" || pitcher_id || auto_type_id as auto_pitch_id, COUNT(*), COUNT(CASE WHEN location_side >= -0.7508 AND location_side <= 0.7508 AND location_height >= 1.5942 AND location_height <= 3.6033 THEN 1 END) FROM temp_trackman WHERE (upload_timestamp + 43200) > ? GROUP BY auto_pitch_id''', (self.timestamp,self.timestamp))
         tupsByID = cur.fetchall()
         zone_ratebyID = {tup[0] : tup[2] / tup[1] for tup in tupsByID if tup[1]}
         cur.executemany('UPDATE arsenal_stats_discipline SET zone_rate = ? WHERE pitch_id = ?', ([(zone_ratebyID.get(id, None), id) for id in arsenalIDs]))

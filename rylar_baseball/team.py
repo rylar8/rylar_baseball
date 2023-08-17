@@ -5,6 +5,15 @@ class Team():
     def __init__(self, trackman_id):
         self.trackman_id = trackman_id 
 
+        conn = sqlite3.connect('rylar_baseball.db')
+        cur = conn.cursor()
+
+        #Get team id from database
+        cur.execute('SELECT team_id FROM teams WHERE trackman_name = ?', (trackman_id,))
+        self.team_id = cur.fetchone()[0]
+
+        conn.close()
+
     def games(self):
         conn = sqlite3.connect('rylar_baseball.db')
         cur = conn.cursor()
